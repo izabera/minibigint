@@ -1,6 +1,7 @@
 #include "big.hpp"
-#include <gmp.h>
 #include <cstdio>
+#include <cstring>
+#include <gmp.h>
 
 using u32 = uint32_t;
 
@@ -23,7 +24,6 @@ bool test_size() {
         for (auto& w : b.words) w = u64(pcg.gen()) << 32 | pcg.gen();
 
         big<limbs> sum = a + b, mul = a * b;
-        big<limbs> gmpsum, gmpmul;
 
         auto print = [](auto b) {
             constexpr auto w = sizeof b.words[0]*2;
@@ -40,16 +40,18 @@ bool test_size() {
             return buf;
         };
 
+        big<limbs> gmpsum;
         mpn_add_n(gmpsum.words, a.words, b.words, limbs);
-        if (sum != gmpsum) {
+        if (memcmp(&sum.words, &gmpsum.words, sizeof sum.words)) {
             printf("sum fail - limbs=%d i=%d\n", limbs, i);
             printf("big: %s\n", print(sum));
             printf("gmp: %s\n", print(gmpsum));
             return false;
         }
 
+        big<limbs*2> gmpmul;
         mpn_mul_n(gmpmul.words, a.words, b.words, limbs);
-        if (mul != gmpmul) {
+        if (memcmp(&mul.words, &gmpmul.words, sizeof mul.words)) {
             printf("mul fail - limbs=%d i=%d\n", limbs, i);
             printf("big: %s\n", print(mul));
             printf("gmp: %s\n", print(gmpmul));
