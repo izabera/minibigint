@@ -8,33 +8,14 @@ struct big {
 
     constexpr big& operator+=(const big& other) {
         u64 carry = 0;
-#if 1
         #pragma clang loop unroll(full)
         for (auto i = 0; i < limbs; i++)
             words[i] = __builtin_addcl(words[i], other.words[i], carry, &carry);
-#else
-        for (auto i = 0; i < limbs; i++) {
-            auto res = u128(words[i]) + other.words[i] + carry;
-            words[i] = res;
-            carry = res >> 64;
-        }
-#endif
         return *this;
     }
 
     constexpr big operator*(const big& other) const {
         big out;
-#if 0
-        for (auto i = 0; i < limbs; i++) {
-            u64 carry = 0;
-            for (auto j = 0; i+j < limbs; j++) {
-                auto tmp = u128(words[i]) * other.words[j] + carry + out.words[i+j];
-                out.words[i+j] = tmp;
-                carry = tmp >> 64;
-            }
-        }
-        return out;
-#else
         u64 carry0 = 0, carry1 = 0;
         for (auto i = 0; i < limbs; i++) {
             u64 lo = carry0, hi = carry1, top = 0;
@@ -53,7 +34,6 @@ struct big {
             carry1 = top;
         }
         return out;
-#endif
     }
 
     constexpr bool operator==(const big& other) const = default;
