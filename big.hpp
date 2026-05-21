@@ -1,6 +1,5 @@
 #include <bit>
 #include <cstdint>
-#include <cstdio>
 #include <numeric>
 using u64 = uint64_t;
 using u128 = __uint128_t;
@@ -84,20 +83,15 @@ struct big {
             return {};
 
         big C{1};
-
+        auto last = 0; // avoid iterating over a ton of zeros
         constexpr auto invtable = inverses();
-//         printf("table of inverses:\n");
-//         for (auto i = 0; i < 256; i++)
-//             printf("i=%d shift=%lu inv=%lu\n", i, invtable.values[i].shift, invtable.values[i].inv);
 
         // n choose i == (n choose (i-1)) * (n-i+1) / i
         for (u64 i = 1; i <= k; i++) {
-            // printf("n=%lu k=%lu i=%lu C=%s ", n, k, i, print(C));
             u64 num = n-i+1, den = i;
             auto g = std::gcd(num, den);
             num /= g;
             den /= g;
-            // printf("num=%lu den=%lu\n", num, den);
 
             // divide first, which is exact
             if (den != 1) {
@@ -105,37 +99,41 @@ struct big {
 
                 auto [shift, inv] = invtable.values[den];
                 auto odd = den >> shift;
-                // printf("dividing! odd=%lu shift=%lu inv=%lu\n", odd, shift, inv);
-                for (auto i = 0; i < limbs; i++) {
+                for (auto i = 0; i <= last || carry; i++) {
+                    last = std::max(i, last);
                     u64 q = (C.words[i] - carry) * inv; // low 64 bits
                     auto prod = u128(q) * odd + carry;
                     C.words[i] = q;
                     carry = prod >> 64;
                 }
-                // if (carry != 0) error("nonzero carry???");
-                // printf("after dividing   : C=%s carry=%lu\n", print(C), carry);
+                // division and shifts can reduce the last limb we're touching
+                while (last > 0 && C.words[last] == 0)
+                    --last;
 
                 if (shift) {
                     u64 hi = 0;
-                    for (int i = limbs-1; i >= 0; i--) {
+                    for (int i = last; i >= 0; i--) {
                         auto w = C.words[i];
                         C.words[i] = (w >> shift) | (hi << (64 - shift));
                         hi = w;
                     }
+                    while (last > 0 && C.words[last] == 0)
+                        --last;
                 }
-                // printf("after shifting   : C=%s\n", print(C));
             }
 
             // then multiply, so the state stays a bit smaller
             if (num != 1) {
                 u64 carry = 0;
-                for (auto i = 0; i < limbs; i++) {
+                for (auto i = 0; i <= last; i++) {
                     auto tmp = u128(C.words[i]) * num + carry;
                     C.words[i] = tmp;
                     carry = tmp >> 64;
                 }
+                // and multiplication can increase it
+                if (carry)
+                    C.words[++last] = carry;
             }
-            // printf("after multiplying: C=%s\n", print(C));
         }
         return C;
     }
