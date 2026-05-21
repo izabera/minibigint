@@ -51,54 +51,38 @@ struct big {
         return *this;
     }
 
-    // we only need to support n choose k with k in 1..255
-    // so we precompute a table of all the modular inverses and shifts
-    static constexpr auto inverses() {
-        struct {
-            struct { u64 shift, inv; } values[256]; // AoS
-        } modular;
-
-        auto newton = [](auto d) {
-            u64 x = d; // valid inverse mod 8 for odd d
-            x *= 2 - d * x;
-            x *= 2 - d * x;
-            x *= 2 - d * x;
-            x *= 2 - d * x;
-            x *= 2 - d * x;
-            x *= 2 - d * x;
-            return x;
-        };
-
-        modular.values[0] = {0, 1};
-        for (u64 i = 1; i < 256; i++) {
-            u64 shift = std::countr_zero(i);
-            modular.values[i] = {shift, (i >> shift) ? newton(i>>shift): 1};
-        }
-
-        return modular;
-    }
-
     static constexpr big binom(u64 n, u64 k) {
         if (k > n || k > 255)
             return {};
 
         big C{1};
+
         auto last = 0; // avoid iterating over a ton of zeros
-        constexpr auto invtable = inverses();
+        u64 num_acc = 1, den_acc = 1; // also batch things
 
-        // n choose i == (n choose (i-1)) * (n-i+1) / i
-        for (u64 i = 1; i <= k; i++) {
-            u64 num = n-i+1, den = i;
-            auto g = std::gcd(num, den);
-            num /= g;
-            den /= g;
-
+        auto step = [&] {
             // divide first, which is exact
-            if (den != 1) {
+            if (den_acc != 1) {
                 u64 carry = 0;
 
-                auto [shift, inv] = invtable.values[den];
-                auto odd = den >> shift;
+                auto inverse = [](auto i) {
+                    auto newton = [](auto d) {
+                        u64 x = d; // valid inverse mod 8 for odd d
+                        x *= 2 - d * x;
+                        x *= 2 - d * x;
+                        x *= 2 - d * x;
+                        x *= 2 - d * x;
+                        x *= 2 - d * x;
+                        x *= 2 - d * x;
+                        return x;
+                    };
+
+                    u64 shift = std::countr_zero(i);
+                    return std::pair{shift, (i >> shift) ? newton(i>>shift): 1};
+                };
+
+                auto [shift, inv] = inverse(den_acc);
+                auto odd = den_acc >> shift;
                 for (auto i = 0; i <= last || carry; i++) {
                     last = std::max(i, last);
                     u64 q = (C.words[i] - carry) * inv; // low 64 bits
@@ -123,10 +107,10 @@ struct big {
             }
 
             // then multiply, so the state stays a bit smaller
-            if (num != 1) {
+            if (num_acc != 1) {
                 u64 carry = 0;
                 for (auto i = 0; i <= last; i++) {
-                    auto tmp = u128(C.words[i]) * num + carry;
+                    auto tmp = u128(C.words[i]) * num_acc + carry;
                     C.words[i] = tmp;
                     carry = tmp >> 64;
                 }
@@ -134,7 +118,35 @@ struct big {
                 if (carry)
                     C.words[++last] = carry;
             }
+        };
+
+        // n choose i == (n choose (i-1)) * (n-i+1) / i
+        for (u64 i = 1; i <= k; i++) {
+            u64 num = n-i+1, den = i;
+
+            auto gcd_reduce = [](auto &a, auto &b) {
+                auto g = std::gcd(a, b);
+                a /= g;
+                b /= g;
+            };
+            gcd_reduce(num, den);
+            gcd_reduce(num, den_acc);
+            gcd_reduce(den, num_acc);
+
+            // batch as many num updates as will fit in a u64
+            u64 tmpnum, tmpden;
+            if (!__builtin_mul_overflow (num_acc, num, &tmpnum) && !__builtin_mul_overflow (den_acc, den, &tmpden)) {
+                num_acc = tmpnum;
+                den_acc = tmpden;
+            }
+            else {
+                step();
+                num_acc = num;
+                den_acc = den;
+            }
         }
+
+        step(); // final flush
         return C;
     }
 };
