@@ -2,6 +2,7 @@ CXXFLAGS = -O3 -march=native -ggdb3 -std=c++23 -MMD -MP
 CXX = clang++
 LINK.o = $(CXX) $(LDFLAGS)
 
+test: LDLIBS += -lgmp
 test: test.o
 
 clean:
