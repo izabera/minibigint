@@ -122,7 +122,7 @@ struct big {
         // we only need to support n choose k with k in 1..255
         // so we precompute a table of all the factors
         // their product is n choose k * k!
-        u64 factors[256]{};
+        u64 factors[256];
         for (auto i = 0; i < k; i++)
             factors[i] = n - k + 1 + i;
 
