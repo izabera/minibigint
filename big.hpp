@@ -15,7 +15,7 @@ constexpr static u32 primes[] {
     199,211,223,227,229,233,239,241,251,
 };
 
-constexpr auto inverses = [] {
+constexpr static auto inverses = [] {
     struct { u64 inverses[256]; } table{};
 
     // newton
@@ -84,12 +84,17 @@ struct big {
     static constexpr big binom(u64 n, u64 k) {
         using namespace detail;
 
-        if (k > n || k > 255)
-            return {};
         if (n - k < k)
             k = n - k;
-        if (k == 1)
-            return {n};
+        if (k > n || k > 255)
+            return {};
+
+        switch (u64 tmp; k) {
+            case 0: return {1};
+            case 1: return {n};
+            case 2: if (!__builtin_mul_overflow(n>>1, n&1?n:n-1, &tmp))
+                        return {tmp};
+        }
 
         big C{1};
 
