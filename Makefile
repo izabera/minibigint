@@ -9,8 +9,17 @@ test: LDLIBS += -lgmp
 test: test.o
 
 clean:
-	rm -f *.[od] test
+	rm -f benchmark/*.[od] benchmark/bench *.[od] test
 
 .PHONY: clean
 
--include *.d
+limbs := $(shell seq 4 80)
+objs := $(limbs:%=benchmark/bench_%.o)
+
+benchmark/bench_%.o: CPPFLAGS += -DLIMBS=$* -I.
+$(objs): benchmark/impl.cpp
+	$(COMPILE.cpp) $< -o $@
+benchmark/bench: LDLIBS += -lgmp
+benchmark/bench: $(objs) benchmark/bench.o benchmark/gmp.o
+
+-include *.d benchmark/*.d

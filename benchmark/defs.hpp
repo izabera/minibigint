@@ -4,6 +4,7 @@
 using u64 = uint64_t;
 
 struct config {
+    u64 seed = 1234567;
     u64 step = 4;
     u64 rounds = 5;
     struct { u64 min, max; } limbs { 4, 80 };

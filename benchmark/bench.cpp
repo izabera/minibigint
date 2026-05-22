@@ -31,11 +31,14 @@ config::config(int argc, char **argv) {
             fprintf(stderr, "error: %s\n", argv[i]);
 
         fprintf(err == 0 ? stdout : stderr,
-            "usage: bench [--min limbs] [--max limbs] [--step limbs] [--rounds n]\n"
+            "usage: bench [--min limbs] [--max limbs]\n"
+            "             [--step limbs] [--rounds n] [--seed n]\n"
             "             [--add-iters n] [--mul-iters n] [--binom-iters n]\n"
             "             [--binom-n n] [--binom-k k]\n"
             "\n"
-            "defaults: --min 4 --max 80 --step 4 --rounds 5 --binom-k 255\n"
+            "defaults: --min 4 --max 80\n"
+            "          --step 4 --rounds 5 --seed 1234567\n"
+            "          --binom-k 255\n"
             "          auto select binom n based on k\n"
             "          auto select iters based on limbs\n"
         );
@@ -54,7 +57,8 @@ config::config(int argc, char **argv) {
             }
             return false;
         };
-        if (!match("step"       , step       ) &&
+        if (!match("seed"       , seed       ) &&
+            !match("step"       , step       ) &&
             !match("rounds"     , rounds     ) &&
             !match("min"        , limbs.min  ) &&
             !match("max"        , limbs.max  ) &&
