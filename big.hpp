@@ -36,13 +36,34 @@ constexpr static auto inverses = [] {
 
 template <int limbs = 4>
 struct big {
-    alignas(64) u64 words[limbs]{}; // little endian
+    u64 words[limbs]{}; // little endian
 
     constexpr big& operator+=(const big& other) {
-        u64 carry = 0;
+        u64 carry = 0, i = 0;
+
+        volatile u64* rp = words; // this absolutely has to live in a register
+
         #pragma clang loop unroll(full)
-        for (auto i = 0; i < limbs; i++)
-            words[i] = __builtin_addcl(words[i], other.words[i], carry, &carry);
+        for ( ; i < (limbs & ~3); i += 4) {
+            u64 r0 = rp[i+0];
+            u64 r1 = rp[i+1];
+            u64 r2 = rp[i+2];
+            u64 r3 = rp[i+3];
+
+            r0 = __builtin_addcl(r0, other.words[i+0], carry, &carry);
+            r1 = __builtin_addcl(r1, other.words[i+1], carry, &carry);
+            r2 = __builtin_addcl(r2, other.words[i+2], carry, &carry);
+            r3 = __builtin_addcl(r3, other.words[i+3], carry, &carry);
+
+            rp[i+0] = r0;
+            rp[i+1] = r1;
+            rp[i+2] = r2;
+            rp[i+3] = r3;
+        }
+
+        #pragma clang loop unroll(full)
+        for (; i < limbs; i++)
+            rp[i] = __builtin_addcl(rp[i], other.words[i], carry, &carry);
         return *this;
     }
 
@@ -112,6 +133,7 @@ struct big {
             if (p > k)
                 break;
 
+            // loop over the powers of p
             for (auto q = p; q <= k; q *= p) {
                 auto need = k / q;
 
