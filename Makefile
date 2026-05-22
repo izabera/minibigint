@@ -14,10 +14,20 @@ clean:
 .PHONY: clean
 
 limbs := $(shell seq 4 80)
-objs := $(limbs:%=benchmark/bench_%.o)
+gmpobjs   = $(limbs:%=benchmark/bench_gmp_%.o)
+bigobjs   = $(limbs:%=benchmark/bench_big_%.o)
+boostobjs = $(limbs:%=benchmark/bench_boost_%.o)
+objs      = $(gmpobjs) $(bigobjs) $(boostobjs)
 
-benchmark/bench_%.o: CPPFLAGS += -DLIMBS=$* -I.
-$(objs): benchmark/impl.cpp
+benchmark/bench_gmp_%.o:   CPPFLAGS += -I. -DLIMBS=$*
+benchmark/bench_big_%.o:   CPPFLAGS += -I. -DLIMBS=$*
+benchmark/bench_boost_%.o: CPPFLAGS += -I. -DLIMBS=$*
+
+$(gmpobjs):   benchmark/gmp_templates.cpp
+$(bigobjs):   benchmark/big_templates.cpp
+$(boostobjs): benchmark/boost_templates.cpp
+
+$(objs):
 	$(COMPILE.cpp) $< -o $@
 benchmark/bench: LDLIBS += -lgmp
 benchmark/bench: $(objs) benchmark/bench.o benchmark/gmp.o

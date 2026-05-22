@@ -1,3 +1,5 @@
+#pragma once
+
 #include <cstdint>
 using u8 = uint8_t;
 using u32 = uint32_t;
@@ -36,7 +38,7 @@ constexpr static auto inverses = [] {
 
 template <int limbs = 4>
 struct big {
-    u64 words[limbs]{}; // little endian
+    u64 words[limbs]; // little endian
 
     constexpr big& operator+=(const big& other) {
         u64 carry = 0, i = 0;

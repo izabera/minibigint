@@ -76,4 +76,18 @@ config::config(int argc, char **argv) {
 
 int main(int argc, char **argv) {
     auto conf = config(argc, argv);
+
+    for (auto &b : bench) {
+        b.big.add(conf);
+        b.gmp.add(conf);
+        b.boost.add(conf);
+
+        b.big.mul(conf);
+        b.gmp.mul(conf);
+        b.boost.mul(conf);
+
+        b.big.binom(conf);
+        b.gmp.binom(conf);
+        b.boost.binom(conf);
+    }
 }
