@@ -86,6 +86,10 @@ struct big {
 
         if (k > n || k > 255)
             return {};
+        if (n - k < k)
+            k = n - k;
+        if (k == 1)
+            return {n};
 
         big C{1};
 
