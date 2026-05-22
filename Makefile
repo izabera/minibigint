@@ -14,21 +14,19 @@ clean:
 .PHONY: clean
 
 limbs := $(shell seq 4 80)
-gmpobjs   = $(limbs:%=benchmark/bench_gmp_%.o)
-bigobjs   = $(limbs:%=benchmark/bench_big_%.o)
-boostobjs = $(limbs:%=benchmark/bench_boost_%.o)
-objs      = $(gmpobjs) $(bigobjs) $(boostobjs)
+backends := gmp big boost
 
-benchmark/bench_gmp_%.o:   CPPFLAGS += -I. -DLIMBS=$*
-benchmark/bench_big_%.o:   CPPFLAGS += -I. -DLIMBS=$*
-benchmark/bench_boost_%.o: CPPFLAGS += -I. -DLIMBS=$*
+define bench_template
+$(1)objs := $(limbs:%=benchmark/bench_$(1)_%.o)
 
-$(gmpobjs):   benchmark/gmp_templates.cpp
-$(bigobjs):   benchmark/big_templates.cpp
-$(boostobjs): benchmark/boost_templates.cpp
+$(limbs:%=benchmark/bench_$(1)_%.o): benchmark/bench_$(1)_%.o: benchmark/$(1)_templates.cpp
+	$$(COMPILE.cpp) -I. -DLIMBS=$$* $$< -o $$@
+endef
 
-$(objs):
-	$(COMPILE.cpp) $< -o $@
+$(foreach backend,$(backends),$(eval $(call bench_template,$(backend))))
+
+objs := $(foreach backend,$(backends),$($(backend)objs))
+
 benchmark/bench: LDLIBS += -lgmp
 benchmark/bench: $(objs) benchmark/bench.o benchmark/gmp.o
 

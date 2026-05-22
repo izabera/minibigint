@@ -40,7 +40,7 @@ u64 gmp_mul_impl  (const config& conf, int limbs) {
     return checksum;
 }
 
-u64 gmp_bimom_impl(const config& conf, int limbs) {
+u64 gmp_binom_impl(const config& conf, int limbs) {
     mpz_t value;
     mpz_init2(value, MAXLIMBS * 64); // XXX: or is it MAXLIMBS+1?
     u64 checksum = 0;

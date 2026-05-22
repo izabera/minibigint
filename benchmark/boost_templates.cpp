@@ -12,30 +12,30 @@ using boost_uint = mp::number<mp::cpp_int_backend<
 
 template <int limbs> u64 boost_add(const config &conf) {
     boost_uint<limbs> x, y;
-    conf.rng.fill(x.backend().limbs(), limbs);
-    conf.rng.fill(y.backend().limbs(), limbs);
+    conf.rng.fill(reinterpret_cast<u64*>(x.backend().limbs()), limbs);
+    conf.rng.fill(reinterpret_cast<u64*>(y.backend().limbs()), limbs);
 
     for (u64 i = 0; i < conf.iters.add; i++) {
         x += y;
         asm volatile("":"+m"(x)::"memory");
     }
 
-    auto checksum = hash(x.backend().limbs(), limbs);
+    auto checksum = hash(reinterpret_cast<const u64*>(x.backend().limbs()), limbs);
     sink ^= checksum;
     return checksum;
 }
 
 template <int limbs> u64 boost_mul(const config &conf) {
     boost_uint<limbs> x, y;
-    conf.rng.fill(x.backend().limbs(), limbs);
-    conf.rng.fill(y.backend().limbs(), limbs);
+    conf.rng.fill(reinterpret_cast<u64*>(x.backend().limbs()), limbs);
+    conf.rng.fill(reinterpret_cast<u64*>(y.backend().limbs()), limbs);
 
     for (u64 i = 0; i < conf.iters.add; i++) {
         x *= y;
         asm volatile("":"+m"(x)::"memory");
     }
 
-    auto checksum = hash(x.backend().limbs(), limbs);
+    auto checksum = hash(reinterpret_cast<const u64*>(x.backend().limbs()), limbs);
     sink ^= checksum;
     return checksum;
 }
@@ -55,7 +55,7 @@ template <int limbs> u64 boost_binom(const config &conf) {
     auto [n, k] = conf.binom;
     for (u64 i = 0; i < conf.iters.binom; i++) {
         auto value = binomial(binom_n_for_iter(n, k, i), k);
-        checksum ^= hash(value.backend().limbs(), limbs) ^ i;
+        checksum ^= hash(reinterpret_cast<const u64*>(value.backend().limbs()), limbs) ^ i;
     }
 
     sink ^= checksum;

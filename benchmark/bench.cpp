@@ -77,17 +77,18 @@ config::config(int argc, char **argv) {
 int main(int argc, char **argv) {
     auto conf = config(argc, argv);
 
-    for (auto &b : bench) {
-        b.big.add(conf);
-        b.gmp.add(conf);
-        b.boost.add(conf);
+    for (auto i = 4; i <= MAXLIMBS; i++) {
+#define call(impl,fn) printf("limbs=%d %s.%s\n", i, #impl, #fn); bench[i].impl.fn(conf);
+        call(big,add);
+        call(gmp,add);
+        call(boost,add);
 
-        b.big.mul(conf);
-        b.gmp.mul(conf);
-        b.boost.mul(conf);
+        call(big,mul);
+        call(gmp,mul);
+        call(boost,mul);
 
-        b.big.binom(conf);
-        b.gmp.binom(conf);
-        b.boost.binom(conf);
+        call(big,binom);
+        call(gmp,binom);
+        call(boost,binom);
     }
 }
