@@ -57,7 +57,7 @@ config::config(int argc, char **argv) {
             }
             return false;
         };
-        if (!match("seed"       , seed       ) &&
+        if (!match("seed"       , rng.state  ) &&
             !match("step"       , step       ) &&
             !match("rounds"     , rounds     ) &&
             !match("min"        , limbs.min  ) &&

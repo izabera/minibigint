@@ -1,16 +1,73 @@
 #pragma once
 
+#define MAXLIMBS 80
+
 #include <cstdint>
+using u32 = uint32_t;
 using u64 = uint64_t;
 
+// bunch of lightweight utilities
+struct pcg {
+    u64 state, inc = 99999;
+    u32 gen() {
+        auto old = state;
+        state = old * 6364136223846793005 + inc;
+        u32 xs = ((old >> 18) ^ old) >> 27;
+        u32 rot = old >> 59;
+        return (xs >> rot) | (xs << ((-rot) & 31));
+    }
+    u64 gen64() { return gen() | u64(gen()) << 32; }
+    void fill(u64 *ptr, u64 size) {
+        for (u64 i = 0; i < size; i++)
+            ptr[i] = gen64();
+    }
+};
+
 struct config {
-    u64 seed = 1234567;
-    u64 step = 4;
-    u64 rounds = 5;
+    mutable pcg rng { u64(this) };
+
+    u64 step = 4, rounds = 5;
     struct { u64 min, max; } limbs { 4, 80 };
     struct { u64 add, mul, binom; } iters {};
     struct { u64 n, k; } binom {};
     config(int argc, char **argv);
+};
+
+static inline u64 hash(const u64 *ptr, u64 size) { // something like murmur3
+    auto fmix64 = [](u64 k) {
+        k ^= k >> 33;
+        k *= 0xff51afd7ed558ccd;
+        k ^= k >> 33;
+        k *= 0xc4ceb9fe1a85ec53;
+        k ^= k >> 33;
+        return k;
+    };
+
+    u64 acc = 0x6a09e667f3bcc909;
+    for (u64 i = 0; i < size; i++)
+        acc = fmix64(acc ^ ptr[i] ^ i * 0x9e3779b97f4a7c15);
+    return acc;
+}
+
+static inline u64 binom_n_for_iter(u64 n, u64 k, u64 i) {
+    u64 delta = n - k >= 15 ? (i & 15) : 0;
+    return n - delta;
+}
+
+static volatile u64 sink;
+
+struct buf {
+    u64 data[MAXLIMBS];
+    buf() : data{} {}
+    buf(const config& conf, int limbs) { conf.rng.fill(data, limbs); }
+
+    // basically a length limited copy assign
+    auto copyfrom(const buf& other, int limbs) {
+        __builtin_memcpy(data, other, sizeof *data * limbs);
+    }
+
+    operator const u64*() const { return data; }
+    operator u64*() { return data; }
 };
 
 // lightweight templates for gmp just to pass the limbs parameter
