@@ -1,8 +1,38 @@
-#include <bit>
 #include <cstdint>
-#include <numeric>
+using u8 = uint8_t;
+using u32 = uint32_t;
 using u64 = uint64_t;
 using u128 = __uint128_t;
+
+// this part is here to avoid reinstantiating it 300 times
+namespace detail {
+constexpr static u32 primes[] {
+      2,  3,  5,  7, 11, 13, 17, 19, 23,
+     29, 31, 37, 41, 43, 47, 53, 59, 61,
+     67, 71, 73, 79, 83, 89, 97,101,103,
+    107,109,113,127,131,137,139,149,151,
+    157,163,167,173,179,181,191,193,197,
+    199,211,223,227,229,233,239,241,251,
+};
+
+constexpr auto inverses = [] {
+    struct { u64 inverses[256]; } table{};
+
+    // newton
+    for (auto i = 3; i < 256; i += 2) {
+        u64 x = i; // valid inverse mod 8 for odd d
+        x *= 2 - i * x;
+        x *= 2 - i * x;
+        x *= 2 - i * x;
+        x *= 2 - i * x;
+        x *= 2 - i * x;
+        x *= 2 - i * x;
+        table.inverses[i] = x;
+    }
+
+    return table;
+}();
+}
 
 template <int limbs = 4>
 struct big {
@@ -52,97 +82,70 @@ struct big {
     }
 
     static constexpr big binom(u64 n, u64 k) {
+        using namespace detail;
+
         if (k > n || k > 255)
             return {};
 
         big C{1};
 
-        auto last = 0; // avoid iterating over a ton of zeros
-        u64 num_acc = 1, den_acc = 1; // also batch things
+        // we only need to support n choose k with k in 1..255
+        // so we precompute a table of all the factors
+        // their product is n choose k * k!
+        u64 factors[256]{};
+        for (auto i = 0; i < k; i++)
+            factors[i] = n - k + 1 + i;
 
-        auto step = [&] {
-            // divide first, which is exact
-            if (den_acc != 1) {
-                u64 carry = 0;
+        // then remove all their factors in common with k!
+        auto lo = n - k + 1;
 
-                auto inverse = [](auto i) {
-                    auto newton = [](auto d) {
-                        u64 x = d; // valid inverse mod 8 for odd d
-                        x *= 2 - d * x;
-                        x *= 2 - d * x;
-                        x *= 2 - d * x;
-                        x *= 2 - d * x;
-                        x *= 2 - d * x;
-                        x *= 2 - d * x;
-                        return x;
-                    };
+        for (auto p : primes) {
+            if (p > k)
+                break;
 
-                    u64 shift = std::countr_zero(i);
-                    return std::pair{shift, (i >> shift) ? newton(i>>shift): 1};
-                };
+            for (auto q = p; q <= k; q *= p) {
+                auto need = k / q;
 
-                auto [shift, inv] = inverse(den_acc);
-                auto odd = den_acc >> shift;
-                for (auto i = 0; i <= last || carry; i++) {
-                    last = std::max(i, last);
-                    u64 q = (C.words[i] - carry) * inv; // low 64 bits
-                    auto prod = u128(q) * odd + carry;
-                    C.words[i] = q;
-                    carry = prod >> 64;
-                }
-                // division and shifts can reduce the last limb we're touching
-                while (last > 0 && C.words[last] == 0)
-                    --last;
+                // first multiple of q in [lo, n]
+                auto m = lo + ((q - lo % q) % q);
 
-                if (shift) {
-                    u64 hi = 0;
-                    for (int i = last; i >= 0; i--) {
-                        auto w = C.words[i];
-                        C.words[i] = (w >> shift) | (hi << (64 - shift));
-                        hi = w;
-                    }
-                    while (last > 0 && C.words[last] == 0)
-                        --last;
+                for (auto i = 0; i < need; i++, m += q) {
+                    auto &f = factors[m - lo];
+                    // if (m - lo >= k) throw;
+
+                    // f /= p
+                    if (p == 2)
+                        f >>= 1;
+                    else
+                        f *= inverses.inverses[p];
                 }
             }
+        }
 
-            // then multiply, so the state stays a bit smaller
-            if (num_acc != 1) {
-                u64 carry = 0;
-                for (auto i = 0; i <= last; i++) {
-                    auto tmp = u128(C.words[i]) * num_acc + carry;
-                    C.words[i] = tmp;
-                    carry = tmp >> 64;
-                }
-                // and multiplication can increase it
-                if (carry)
-                    C.words[++last] = carry;
+        // finally, multiply them all up
+
+        u64 acc = 1; // batch things
+        auto step = [&, last = 0] mutable {
+            u64 carry = 0;
+            for (auto i = 0; i <= last; i++) { // don't iterate over zeros
+                auto tmp = u128(C.words[i]) * acc + carry;
+                C.words[i] = tmp;
+                carry = tmp >> 64;
             }
+            if (carry)
+                C.words[++last] = carry;
         };
 
-        // n choose i == (n choose (i-1)) * (n-i+1) / i
-        for (u64 i = 1; i <= k; i++) {
-            u64 num = n-i+1, den = i;
-
-            auto gcd_reduce = [](auto &a, auto &b) {
-                auto g = std::gcd(a, b);
-                a /= g;
-                b /= g;
-            };
-            gcd_reduce(num, den);
-            gcd_reduce(num, den_acc);
-            gcd_reduce(den, num_acc);
-
-            // batch as many num updates as will fit in a u64
-            u64 tmpnum, tmpden;
-            if (!__builtin_mul_overflow (num_acc, num, &tmpnum) && !__builtin_mul_overflow (den_acc, den, &tmpden)) {
-                num_acc = tmpnum;
-                den_acc = tmpden;
-            }
+        for (auto i = 0; i < k; i++) {
+            auto f = factors[i];
+            if (f <= 1)
+                continue;
+            u64 tmp;
+            if (!__builtin_mul_overflow(acc, f, &tmp))
+                acc = tmp;
             else {
                 step();
-                num_acc = num;
-                den_acc = den;
+                acc = f;
             }
         }
 

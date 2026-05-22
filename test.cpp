@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <cstdint>
 #include <cstring>
+#include <initializer_list>
 #include <gmp.h>
 
 using u32 = uint32_t;

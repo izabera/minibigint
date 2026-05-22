@@ -1,6 +1,7 @@
 CXXFLAGS = -O3 -march=native -ggdb3 -std=c++23 -MMD -MP
 # CXXFLAGS = -std=c++23 -MMD -MP -fsanitize=address
 # LDFLAGS += -fsanitize=address
+# CXXFLAGS = -std=c++23 -MMD -MP
 CXX = clang++
 LINK.o = $(CXX) $(LDFLAGS)
 
