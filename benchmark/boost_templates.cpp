@@ -1,5 +1,6 @@
 #include "defs.hpp"
 #include <boost/multiprecision/cpp_int.hpp>
+#include <numeric>
 
 namespace mp = boost::multiprecision;
 template <int limbs>
@@ -59,15 +60,25 @@ template <int limbs>
 u64 boost_binom(const config &conf) {
     u64 checksum = 0;
 
-    // this is just the basic recursive form
+    // this is a little faster than the basic recursive form
     // which is apparently the recommended way to do it
     // https://stackoverflow.com/a/33027607
-    auto binomial = [](this auto&& self, u64 n, u64 k) -> boost_uint<limbs> {
+    auto binomial = [](u64 n, u64 k) -> boost_uint<limbs> {
         if (n - k < k)
             k = n - k;
-        if (k == 0)
-            return 1;
-        return (n * self(n - 1, k - 1)) / k;
+
+        boost_uint<limbs> value = 1;
+        for (u64 i = 1; i <= k; i++) {
+            u64 num = n - k + i, den = i;
+            u64 gcd = std::gcd(num, den);
+
+            num /= gcd;
+            den /= gcd;
+            value /= den;
+            value *= num;
+        }
+
+        return value;
     };
 
     auto [n, k] = conf.binom;
