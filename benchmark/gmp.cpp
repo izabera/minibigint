@@ -49,7 +49,7 @@ u64 gmp_binom_impl(const config& conf, int limbs) {
     auto [n, k] = conf.binom;
     for (u64 i = 0; i < conf.iters.binom; i++) {
         mpz_bin_uiui(value, binom_n_for_iter(n, k, i), k);
-        checksum ^= hash(mpz_limbs_read(value), limbs) ^ i;
+        checksum ^= hash(mpz_limbs_read(value), limbs, mpz_size(value)) ^ i;
     }
 
     sink ^= checksum;

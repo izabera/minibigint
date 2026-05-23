@@ -135,10 +135,12 @@ int main(int argc, char **argv) {
         auto timeit = [&](auto &impl) {
             conf.rng = saved.rng;
 
+            struct { u64 add, mul, binom; } cksum;
+
             auto t0 = std::chrono::steady_clock::now();
-            impl.add(conf);   auto t1 = std::chrono::steady_clock::now();
-            impl.mul(conf);   auto t2 = std::chrono::steady_clock::now();
-            impl.binom(conf); auto t3 = std::chrono::steady_clock::now();
+            cksum.add   = impl.add(conf);   auto t1 = std::chrono::steady_clock::now();
+            cksum.mul   = impl.mul(conf);   auto t2 = std::chrono::steady_clock::now();
+            cksum.binom = impl.binom(conf); auto t3 = std::chrono::steady_clock::now();
 
             decltype(impl.times) current {
                 (t1-t0).count() * 1. / conf.iters.add,
@@ -150,12 +152,29 @@ int main(int argc, char **argv) {
             impl.times.add   = std::min(impl.times.add  , current.add  );
             impl.times.mul   = std::min(impl.times.mul  , current.mul  );
             impl.times.binom = std::min(impl.times.binom, current.binom);
+
+            return cksum;
         };
 
         for (u64 r = 0; r < conf.rounds; r++) {
-            timeit(bench[i].big);
-            timeit(bench[i].gmp);
-            timeit(bench[i].boost);
+            auto big   = timeit(bench[i].big);
+            auto gmp   = timeit(bench[i].gmp);
+            auto boost = timeit(bench[i].boost);
+
+            auto check = [&](const char *op, u64 b, u64 g, u64 x) {
+                if (b == g && b == x)
+                    return;
+
+                fprintf(stderr,
+                    "checksum mismatch! limbs=%lu op=%s "
+                    "big=%016lx gmp=%016lx boost=%016lx\n",
+                    i, op, b, g, x);
+                exit(1);
+            };
+
+            check("add"  , big.add  , gmp.add  , boost.add  );
+            check("mul"  , big.mul  , gmp.mul  , boost.mul  );
+            check("binom", big.binom, gmp.binom, boost.binom);
         }
 
 //               i,bits,op, big, gmp,  x, boost,  x,   n,  k

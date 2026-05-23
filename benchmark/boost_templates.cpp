@@ -24,12 +24,7 @@ template <int limbs>
 static u64 hash_boost(const boost_uint<limbs>& value) {
     auto& backend = value.backend();
     auto *words = reinterpret_cast<const u64*>(backend.limbs());
-    auto n = backend.size();
-
-    u64 acc = 0x6a09e667f3bcc909;
-    for (u64 i = 0; i < limbs; i++)
-        acc = fmix64(i < n ? words[i] : 0);
-    return acc;
+    return hash(words, limbs, backend.size());
 }
 
 template <int limbs>

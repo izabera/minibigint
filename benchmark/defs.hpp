@@ -46,12 +46,15 @@ static inline auto fmix64(u64 k) {
     return k;
 }
 
-static inline u64 hash(const u64 *ptr, u64 size) { // something like murmur3
-
+static inline u64 hash(const u64 *ptr, u64 size, u64 used) { // something like murmur3
     u64 acc = 0x6a09e667f3bcc909;
     for (u64 i = 0; i < size; i++)
-        acc = fmix64(acc ^ ptr[i] ^ i * 0x9e3779b97f4a7c15);
+        acc = fmix64(acc ^ (i < used ? ptr[i] : 0) ^ i * 0x9e3779b97f4a7c15);
     return acc;
+}
+
+static inline u64 hash(const u64 *ptr, u64 size) {
+    return hash(ptr, size, size);
 }
 
 static inline u64 binom_n_for_iter(u64 n, u64 k, u64 i) {
