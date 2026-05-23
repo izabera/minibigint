@@ -17,7 +17,7 @@ u64 gmp_add_impl(const config& conf, int limbs) {
 // i don't know how to access this otherwise
 // if things break, use the fallback, which computes mullo manually
 // mpn_mul_n computes both lo and hi which is not really a fair comparison
-#if HAVE_GMP_MULLO_N
+#if WITH_GMP_MULLO_N
 extern "C"
 void __gmpn_mullo_n(mp_ptr, mp_srcptr, mp_srcptr, mp_size_t);
 #endif
@@ -27,7 +27,7 @@ u64 gmp_mul_impl(const config& conf, int limbs) {
     y[0] |= 1;
 
     for (u64 i = 0; i < conf.iters.mul; i++) {
-#if HAVE_GMP_MULLO_N
+#if WITH_GMP_MULLO_N
         __gmpn_mullo_n(acc, x, y, limbs);
         x.copyfrom(acc, limbs);
 #else

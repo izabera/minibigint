@@ -42,12 +42,14 @@ config::config(int argc, char **argv) {
             "             [--step limbs] [--rounds n] [--seed n]\n"
             "             [--add-iters n] [--mul-iters n] [--binom-iters n]\n"
             "             [--binom-n n] [--binom-k k]\n"
+            "             [--boost n]\n"
             "\n"
             "defaults: --min 4 --max 80\n"
             "          --step 4 --rounds 5 --seed 1234567\n"
             "          --binom-k 255\n"
+            "          --boost %d\n"
             "          auto select binom n based on k\n"
-            "          auto select iters based on limbs\n"
+            "          auto select iters based on limbs\n", int(with_boost)
         );
         exit(err);
     };
@@ -73,7 +75,8 @@ config::config(int argc, char **argv) {
             !match("mul-iters"  , iters.mul  ) &&
             !match("binom-iters", iters.binom) &&
             !match("binom-n"    , binom.n    ) &&
-            !match("binom-k"    , binom.k    ))
+            !match("binom-k"    , binom.k    ) &&
+            !match("boost"      , with_boost ))
             usage(1);
     }
 
@@ -96,6 +99,9 @@ int main(int argc, char **argv) {
 
     if (conf.rounds > MAXROUNDS || conf.rounds == 0)
         conf.rounds = MAXROUNDS;
+
+    conf.with_boost = conf.with_boost && with_boost;
+    printf("# boost=%d\n", int(conf.with_boost));
 
     printf("# step=%lu rounds=%lu seed=%lu limbs={%lu %lu}\n",
            conf.step, conf.rounds, conf.rng.state,
@@ -167,7 +173,7 @@ int main(int argc, char **argv) {
                 return cksum;
             };
 
-            cksum ckbig, ckgmp, ckboost;
+            cksum ckbig{}, ckgmp{}, ckboost{};
 
             // run them in a random order
             enum { run_big, run_gmp, run_boost } order[] { run_big, run_gmp, run_boost };
@@ -181,12 +187,14 @@ int main(int argc, char **argv) {
                 switch (which) {
                     case run_big  : ckbig   = timeit(bench[i].big  ); break;
                     case run_gmp  : ckgmp   = timeit(bench[i].gmp  ); break;
-                    case run_boost: ckboost = timeit(bench[i].boost); break;
+                    case run_boost:
+                        if (conf.with_boost)
+                            ckboost = timeit(bench[i].boost);
                 }
             }
 
             auto check = [&](const char *op, u64 b, u64 g, u64 x) {
-                if (b == g && b == x)
+                if (b == g && (!conf.with_boost || b == x))
                     return;
 
                 fprintf(stderr,
@@ -231,21 +239,36 @@ int main(int argc, char **argv) {
 #define FIELD median // pick the most interesting one between mean/median/best
 #endif
 
-//               i,bits, op, big, gmp,  x, boost,  x
-        printf("%lu,%lu,add,%.3f,%.3f,%.3f,%.3f,%.3f\n", i, i * 64,
+        if (conf.with_boost) {
+//                   i,bits, op, big, gmp,  x, boost,  x
+            printf("%lu,%lu,add,%.3f,%.3f,%.3f,%.3f,%.3f\n", i, i * 64,
                 bench[i].big  .FIELD.add,
                 bench[i].gmp  .FIELD.add, bench[i].big.FIELD.add / bench[i].gmp  .FIELD.add,
                 bench[i].boost.FIELD.add, bench[i].big.FIELD.add / bench[i].boost.FIELD.add);
 
-        printf("%lu,%lu,mul,%.3f,%.3f,%.3f,%.3f,%.3f\n", i, i * 64,
+            printf("%lu,%lu,mul,%.3f,%.3f,%.3f,%.3f,%.3f\n", i, i * 64,
                 bench[i].big  .FIELD.mul,
                 bench[i].gmp  .FIELD.mul, bench[i].big.FIELD.mul / bench[i].gmp  .FIELD.mul,
                 bench[i].boost.FIELD.mul, bench[i].big.FIELD.mul / bench[i].boost.FIELD.mul);
 
-        printf("%lu,%lu,binom,%.3f,%.3f,%.3f,%.3f,%.3f\n", i, i * 64,
+            printf("%lu,%lu,binom,%.3f,%.3f,%.3f,%.3f,%.3f\n", i, i * 64,
                 bench[i].big  .FIELD.binom,
                 bench[i].gmp  .FIELD.binom, bench[i].big.FIELD.binom / bench[i].gmp  .FIELD.binom,
                 bench[i].boost.FIELD.binom, bench[i].big.FIELD.binom / bench[i].boost.FIELD.binom);
+        }
+        else {
+            printf("%lu,%lu,add,%.3f,%.3f,%.3f,n/a,n/a\n", i, i * 64,
+                bench[i].big.FIELD.add,
+                bench[i].gmp.FIELD.add, bench[i].big.FIELD.add / bench[i].gmp.FIELD.add);
+
+            printf("%lu,%lu,mul,%.3f,%.3f,%.3f,n/a,n/a\n", i, i * 64,
+                bench[i].big.FIELD.mul,
+                bench[i].gmp.FIELD.mul, bench[i].big.FIELD.mul / bench[i].gmp.FIELD.mul);
+
+            printf("%lu,%lu,binom,%.3f,%.3f,%.3f,n/a,n/a\n", i, i * 64,
+                bench[i].big.FIELD.binom,
+                bench[i].gmp.FIELD.binom, bench[i].big.FIELD.binom / bench[i].gmp.FIELD.binom);
+        }
         fflush(stdout);
 
         conf = saved;

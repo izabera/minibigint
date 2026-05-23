@@ -1,6 +1,8 @@
 #include "defs.hpp"
-#include <boost/multiprecision/cpp_int.hpp>
+
+#if WITH_BOOST
 #include <numeric>
+#include <boost/multiprecision/cpp_int.hpp>
 
 namespace mp = boost::multiprecision;
 template <int limbs>
@@ -91,6 +93,12 @@ u64 boost_binom(const config &conf) {
     return checksum;
 }
 
-template u64 boost_add<LIMBS>(const config&);
-template u64 boost_mul<LIMBS>(const config&);
+#else
+template <int limbs> u64 boost_add  (const config &) { return {}; }
+template <int limbs> u64 boost_mul  (const config &) { return {}; }
+template <int limbs> u64 boost_binom(const config &) { return {}; }
+#endif
+
+template u64 boost_add  <LIMBS>(const config&);
+template u64 boost_mul  <LIMBS>(const config&);
 template u64 boost_binom<LIMBS>(const config&);
