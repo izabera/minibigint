@@ -10,37 +10,42 @@ using boost_uint = mp::number<mp::cpp_int_backend<
     mp::unchecked,
     void>>;
 
-template <int limbs> u64 boost_add(const config &conf) {
+static u64 *get(auto& b) { return reinterpret_cast<u64*>(b.backend().limbs()); }
+
+template <int limbs>
+u64 boost_add(const config &conf) {
     boost_uint<limbs> x, y;
-    conf.rng.fill(reinterpret_cast<u64*>(x.backend().limbs()), limbs);
-    conf.rng.fill(reinterpret_cast<u64*>(y.backend().limbs()), limbs);
+    conf.rng.fill(get(x), limbs);
+    conf.rng.fill(get(y), limbs);
 
     for (u64 i = 0; i < conf.iters.add; i++) {
         x += y;
         asm volatile("":"+m"(x)::"memory");
     }
 
-    auto checksum = hash(reinterpret_cast<const u64*>(x.backend().limbs()), limbs);
+    auto checksum = hash(get(x), limbs);
     sink ^= checksum;
     return checksum;
 }
 
-template <int limbs> u64 boost_mul(const config &conf) {
+template <int limbs>
+u64 boost_mul(const config &conf) {
     boost_uint<limbs> x, y;
-    conf.rng.fill(reinterpret_cast<u64*>(x.backend().limbs()), limbs);
-    conf.rng.fill(reinterpret_cast<u64*>(y.backend().limbs()), limbs);
+    conf.rng.fill(get(x), limbs);
+    conf.rng.fill(get(y), limbs);
 
-    for (u64 i = 0; i < conf.iters.add; i++) {
+    for (u64 i = 0; i < conf.iters.mul; i++) {
         x *= y;
         asm volatile("":"+m"(x)::"memory");
     }
 
-    auto checksum = hash(reinterpret_cast<const u64*>(x.backend().limbs()), limbs);
+    auto checksum = hash(get(x), limbs);
     sink ^= checksum;
     return checksum;
 }
 
-template <int limbs> u64 boost_binom(const config &conf) {
+template <int limbs>
+u64 boost_binom(const config &conf) {
     u64 checksum = 0;
 
     // this is just the basic recursive form
@@ -55,7 +60,7 @@ template <int limbs> u64 boost_binom(const config &conf) {
     auto [n, k] = conf.binom;
     for (u64 i = 0; i < conf.iters.binom; i++) {
         auto value = binomial(binom_n_for_iter(n, k, i), k);
-        checksum ^= hash(reinterpret_cast<const u64*>(value.backend().limbs()), limbs) ^ i;
+        checksum ^= hash(get(value), limbs) ^ i;
     }
 
     sink ^= checksum;

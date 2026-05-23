@@ -1,9 +1,52 @@
 #include "defs.hpp"
 #include "big.hpp"
 
-template <int limbs> u64 big_add  (const config &conf) { return {}; }
-template <int limbs> u64 big_mul  (const config &conf) { return {}; }
-template <int limbs> u64 big_binom(const config &conf) { return {}; }
+template <int limbs>
+u64 big_add(const config &conf) {
+    big<limbs> x, y;
+    conf.rng.fill(x.words, limbs);
+    conf.rng.fill(y.words, limbs);
+
+    for (u64 i = 0; i < conf.iters.add; i++) {
+        x += y;
+        asm volatile("":"+m"(x)::"memory");
+    }
+
+    auto checksum = hash(x.words, limbs);
+    sink ^= checksum;
+    return checksum;
+}
+
+template <int limbs>
+u64 big_mul(const config &conf) {
+    big<limbs> x, y;
+    conf.rng.fill(x.words, limbs);
+    conf.rng.fill(y.words, limbs);
+
+    for (u64 i = 0; i < conf.iters.mul; i++) {
+        x += y;
+        asm volatile("":"+m"(x)::"memory");
+    }
+
+    auto checksum = hash(x.words, limbs);
+    sink ^= checksum;
+    return checksum;
+}
+
+template <int limbs>
+u64 big_binom(const config &conf) {
+    u64 checksum = 0;
+    auto [n, k] = conf.binom;
+
+    for (u64 i = 0; i < conf.iters.binom; i++) {
+        auto result = big<limbs>::binom(binom_n_for_iter(n, k, i), k);
+        checksum ^= hash(result.words, limbs) ^ i;
+    }
+
+    sink ^= checksum;
+    return checksum;
+}
+
 
 template u64 big_add<LIMBS>(const config&);
 template u64 big_mul<LIMBS>(const config&);

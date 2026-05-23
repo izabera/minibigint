@@ -20,7 +20,7 @@ u64 gmp_add_impl(const config& conf, int limbs) {
 extern "C" __attribute__((weak))
 void __gmpn_mullo_n(mp_ptr, mp_srcptr, mp_srcptr, mp_size_t);
 
-u64 gmp_mul_impl  (const config& conf, int limbs) {
+u64 gmp_mul_impl(const config& conf, int limbs) {
     buf x(conf, limbs), y(conf, limbs), acc;
 
     if (__gmpn_mullo_n) {
