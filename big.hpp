@@ -36,6 +36,20 @@ constexpr static auto inverses = [] {
 }();
 }
 
+// ughhhhhhhhhhh
+[[maybe_unused]] __attribute__((always_inline))
+constexpr static unsigned long addc(unsigned long x, unsigned long y,
+                                    unsigned long c, unsigned long *out) {
+      return __builtin_addcl(x, y, c, out);
+}
+
+[[maybe_unused]] __attribute__((always_inline))
+constexpr static unsigned long long addc(unsigned long long x, unsigned long long y,
+                                         unsigned long long c,
+                                         unsigned long long *out) {
+    return __builtin_addcll(x, y, c, out);
+}
+
 template <int limbs = 4>
 struct big {
     u64 words[limbs]; // little endian
@@ -52,10 +66,10 @@ struct big {
             u64 r2 = rp[i+2];
             u64 r3 = rp[i+3];
 
-            r0 = __builtin_addcl(r0, other.words[i+0], carry, &carry);
-            r1 = __builtin_addcl(r1, other.words[i+1], carry, &carry);
-            r2 = __builtin_addcl(r2, other.words[i+2], carry, &carry);
-            r3 = __builtin_addcl(r3, other.words[i+3], carry, &carry);
+            r0 = addc(r0, other.words[i+0], carry, &carry);
+            r1 = addc(r1, other.words[i+1], carry, &carry);
+            r2 = addc(r2, other.words[i+2], carry, &carry);
+            r3 = addc(r3, other.words[i+3], carry, &carry);
 
             rp[i+0] = r0;
             rp[i+1] = r1;
@@ -65,7 +79,7 @@ struct big {
 
         #pragma clang loop unroll(full)
         for (; i < limbs; i++)
-            rp[i] = __builtin_addcl(rp[i], other.words[i], carry, &carry);
+            rp[i] = addc(rp[i], other.words[i], carry, &carry);
         return *this;
     }
 
@@ -79,8 +93,8 @@ struct big {
                 auto p = u128(words[j]) * other.words[i-j];
                 u64 p_lo = p, p_hi = p >> 64, c = 0;
 
-                lo = __builtin_addcl(lo, p_lo, 0, &c);
-                hi = __builtin_addcl(hi, p_hi, c, &c);
+                lo = addc(lo, p_lo, 0, &c);
+                hi = addc(hi, p_hi, c, &c);
                 top += c;
             }
 
@@ -150,7 +164,7 @@ struct big {
         // v2(n choose k) == v2(n!) - v2(k!) - v2((n-k)!)
         //                == n - pop(n) - (k - pop(k)) - ((n-k) - pop(n-k))
         //                == pop(k) + pop(n-k) - pop(n)
-        u64 v2 = __builtin_popcountl(k) + __builtin_popcountl(n-k) - __builtin_popcountl(n);
+        u64 v2 = __builtin_popcountg(k) + __builtin_popcountg(n-k) - __builtin_popcountg(n);
 
         // we only need to support n choose k with k in 1..255
         // so we precompute a table of all the factors, without trailing zeros
@@ -158,7 +172,7 @@ struct big {
         u64 factors[256];
         for (auto i = 0; i < k; i++) {
             auto f = n - k + 1 + i;
-            factors[i] = f >> __builtin_ctzl(f);
+            factors[i] = f >> __builtin_ctzg(f);
         }
 
         // then remove all their factors in common with k!

@@ -1,3 +1,11 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# dependencies = [
+#     "matplotlib",
+#     "pandas",
+# ]
+# ///
+
 import sys
 from pathlib import Path
 
