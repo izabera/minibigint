@@ -8,8 +8,8 @@ using u128 = __uint128_t;
 
 // this part is here to avoid reinstantiating it 300 times
 namespace detail {
-constexpr static u32 primes[] {
-      2,  3,  5,  7, 11, 13, 17, 19, 23,
+constexpr static u32 oddprimes[] {
+          3,  5,  7, 11, 13, 17, 19, 23,
      29, 31, 37, 41, 43, 47, 53, 59, 61,
      67, 71, 73, 79, 83, 89, 97,101,103,
     107,109,113,127,131,137,139,149,151,
@@ -104,6 +104,25 @@ struct big {
         return *this;
     }
 
+    constexpr big& operator<<=(u64 x) {
+        int whole = x >> 6;
+        int frac = x & 63;
+
+        if (whole) {
+            for (auto i = limbs-1; i >= 0; i--)
+                words[i] = i >= whole ? words[i - whole] : 0;
+        }
+        if (frac) {
+            u64 carry = 0;
+            for (auto i = 0; i < limbs; i++) {
+                u64 x = words[i];
+                words[i] = (x << frac) | carry;
+                carry = x >> (64 - frac);
+            }
+        }
+        return *this;
+    }
+
     static constexpr big binom(u64 n, u64 k) {
         using namespace detail;
 
@@ -121,17 +140,31 @@ struct big {
 
         big C{1};
 
+        // https://en.wikipedia.org/wiki/Legendre's_formula
+        // the max power of p that divides k! is sum(floor(k/p^i) for i in 1..inf)
+        // the sum is finite because floor(k/p^i) is 0 if k<p^i
+
+        // writing it in base 2 we get v2(k!) = k - popcount(k)
+
+        // since n choose k == n! / (k!*(n-k)!) we have
+        // v2(n choose k) == v2(n!) - v2(k!) - v2((n-k)!)
+        //                == n - pop(n) - (k - pop(k)) - ((n-k) - pop(n-k))
+        //                == pop(k) + pop(n-k) - pop(n)
+        u64 v2 = __builtin_popcountl(k) + __builtin_popcountl(n-k) - __builtin_popcountl(n);
+
         // we only need to support n choose k with k in 1..255
-        // so we precompute a table of all the factors
-        // their product is n choose k * k!
+        // so we precompute a table of all the factors, without trailing zeros
+        // their product is n choose k * k! / 2^v2
         u64 factors[256];
-        for (auto i = 0; i < k; i++)
-            factors[i] = n - k + 1 + i;
+        for (auto i = 0; i < k; i++) {
+            auto f = n - k + 1 + i;
+            factors[i] = f >> __builtin_ctzl(f);
+        }
 
         // then remove all their factors in common with k!
         auto lo = n - k + 1;
 
-        for (auto p : primes) {
+        for (auto p : oddprimes) {
             if (p > k)
                 break;
 
@@ -146,19 +179,17 @@ struct big {
                     auto &f = factors[m - lo];
                     // if (m - lo >= k) throw;
 
-                    // f /= p
-                    if (p == 2)
-                        f >>= 1;
-                    else
-                        f *= inverses.inverses[p];
+                    f *= inverses.inverses[p]; // f /= p
                 }
             }
         }
 
-        // finally, multiply them all up
+        // multiply them all up
 
+        int last = 0;
         u64 acc = 1; // batch things
-        auto step = [&, last = 0] mutable {
+
+        auto step = [&] {
             u64 carry = 0;
             for (auto i = 0; i <= last; i++) { // don't iterate over zeros
                 auto tmp = u128(C.words[i]) * acc + carry;
@@ -183,6 +214,21 @@ struct big {
         }
 
         step(); // final flush
+
+        // then multiply by 2^v2
+        // this is similar to operator<<=, with a few optimisations:
+        // since n < 2^64 and k<256, the maximum v2 is 63, so whole == 0
+        // also we know we can stop at last
+        if (v2) {
+            u64 carry = 0;
+            for (auto i = 0; i <= last; i++) {
+                u64 x = C.words[i];
+                C.words[i] = (x << v2) | carry;
+                carry = x >> (64 - v2);
+            }
+            if (carry)
+                C.words[++last] = carry;
+        }
         return C;
     }
 };
