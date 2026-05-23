@@ -75,7 +75,7 @@ bool test_arith_all() {
 auto test_binoms() {
     auto check = []<auto limbs>(u64 n, u64 k) {
         auto result = big<limbs>::binom(n, k);
-        big<limbs> gmp;
+        big<limbs> gmp{};
         mpz_t z;
         mpz_init(z);
         mpz_bin_uiui(z, n, k);

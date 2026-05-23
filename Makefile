@@ -2,10 +2,19 @@ CXXFLAGS = -O3 -march=native -ggdb3 -std=c++23 -MMD -MP
 # CXXFLAGS = -std=c++23 -MMD -MP -fsanitize=address
 # LDFLAGS += -fsanitize=address
 # CXXFLAGS = -std=c++23 -MMD -MP
-BENCH_HAVE_GMP_MULLO_N ?= 1
-CPPFLAGS += -DBENCH_HAVE_GMP_MULLO_N=$(BENCH_HAVE_GMP_MULLO_N)
 CXX = clang++
 LINK.o = $(CXX) $(LDFLAGS)
+
+ifeq ($(origin HAVE_GMP_MULLO_N), undefined)
+GMP_MULLO_PROBE = 'extern "C" void __gmpn_mullo_n(); int main() { __gmpn_mullo_n(); }'
+HAVE_GMP_MULLO_N := $(shell echo $(GMP_MULLO_PROBE) | \
+					$(LINK.o) -x c++ - -lgmp -o /dev/null 2>/dev/null; \
+					[ $$? -eq 1 ]; echo $$?)
+endif
+
+CPPFLAGS += -DHAVE_GMP_MULLO_N=$(HAVE_GMP_MULLO_N)
+
+all: test benchmark/bench
 
 test: LDLIBS += -lgmp
 test: test.o

@@ -15,25 +15,25 @@ u64 gmp_add_impl(const config& conf, int limbs) {
 
 // my libgmp.so has this symbol, it's not public afaict
 // i don't know how to access this otherwise
-// if things break, use the fallback, which computes both lo and hi
-// so it's not really a fair comparison
-#if BENCH_HAVE_GMP_MULLO_N
+// if things break, use the fallback, which computes mullo manually
+// mpn_mul_n computes both lo and hi which is not really a fair comparison
+#if HAVE_GMP_MULLO_N
 extern "C"
 void __gmpn_mullo_n(mp_ptr, mp_srcptr, mp_srcptr, mp_size_t);
 #endif
 
 u64 gmp_mul_impl(const config& conf, int limbs) {
     buf x(conf, limbs), y(conf, limbs), acc;
-    y.data[0] |= 1;
+    y[0] |= 1;
 
     for (u64 i = 0; i < conf.iters.mul; i++) {
-#if BENCH_HAVE_GMP_MULLO_N
+#if HAVE_GMP_MULLO_N
         __gmpn_mullo_n(acc, x, y, limbs);
         x.copyfrom(acc, limbs);
 #else
-        __builtin_memset(acc.data, 0, sizeof *acc.data * limbs);
-        for (int j = 0; j < limbs; j++)
-            mpn_addmul_1(acc.data + j, y.data, limbs - j, x.data[j]);
+        mpn_mul_1(acc, y, limbs, x[0]);
+        for (int j = 1; j < limbs; j++)
+            mpn_addmul_1(acc + j, y, limbs - j, x[j]);
         x.copyfrom(acc, limbs);
 #endif
     }
