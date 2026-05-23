@@ -2,6 +2,8 @@ CXXFLAGS = -O3 -march=native -ggdb3 -std=c++23 -MMD -MP
 # CXXFLAGS = -std=c++23 -MMD -MP -fsanitize=address
 # LDFLAGS += -fsanitize=address
 # CXXFLAGS = -std=c++23 -MMD -MP
+BENCH_HAVE_GMP_MULLO_N ?= 1
+CPPFLAGS += -DBENCH_HAVE_GMP_MULLO_N=$(BENCH_HAVE_GMP_MULLO_N)
 CXX = clang++
 LINK.o = $(CXX) $(LDFLAGS)
 
