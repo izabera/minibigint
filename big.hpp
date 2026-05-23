@@ -152,7 +152,8 @@ struct big {
                         return {tmp};
         }
 
-        big C{1};
+        big C;
+        C.words[0] = 1;
 
         // https://en.wikipedia.org/wiki/Legendre's_formula
         // the max power of p that divides k! is sum(floor(k/p^i) for i in 1..inf)
@@ -243,6 +244,8 @@ struct big {
             if (carry)
                 C.words[++last] = carry;
         }
+        for (auto i = last + 1; i < limbs; i++)
+            C.words[i] = 0;
         return C;
     }
 };
