@@ -1,7 +1,6 @@
-CXXFLAGS = -O3 -march=native -ggdb3 -std=c++23 -MMD -MP
-# CXXFLAGS = -std=c++23 -MMD -MP -fsanitize=address
-# LDFLAGS += -fsanitize=address
-# CXXFLAGS = -std=c++23 -MMD -MP
+OPTFLAGS = -O3 -march=native
+CXXFLAGS = $(OPTFLAGS) $(SANITIZE)
+override CXXFLAGS += -ggdb3 -std=c++23 -MMD -MP
 CXX = clang++
 LINK.o = $(CXX) $(LDFLAGS)
 
@@ -12,10 +11,13 @@ HAVE_GMP_MULLO_N := $(shell echo $(GMP_MULLO_PROBE) | \
 					[ $$? -eq 1 ]; echo $$?)
 endif
 
-CPPFLAGS += -DHAVE_GMP_MULLO_N=$(HAVE_GMP_MULLO_N)
+override CPPFLAGS += -DHAVE_GMP_MULLO_N=$(HAVE_GMP_MULLO_N)
 
 all: test benchmark/bench
 
+test: OPTFLAGS =
+test: SANITIZE = -fsanitize=address,undefined
+test: LDFLAGS += $(SANITIZE)
 test: LDLIBS += -lgmp
 test: test.o
 
