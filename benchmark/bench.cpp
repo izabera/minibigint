@@ -1,3 +1,4 @@
+#include <cmath>
 #include <string>
 #include <cstdio>
 #include <cstdlib>
@@ -17,7 +18,11 @@ struct {
         u64 (*add  )(const config&);
         u64 (*mul  )(const config&);
         u64 (*binom)(const config&);
-        struct { double add, mul, binom; } times;
+        struct { double add, mul, binom; } times {
+            std::numeric_limits<double>::infinity(),
+            std::numeric_limits<double>::infinity(),
+            std::numeric_limits<double>::infinity(),
+        };
     } gmp, boost, big;
 } bench[] { {}, {}, {}, {}, ALL(X) };
 
@@ -79,22 +84,79 @@ config::config(int argc, char **argv) {
 int main(int argc, char **argv) {
     auto conf = config(argc, argv);
 
+    if (conf.binom.n == -1 && conf.binom.k != 255) {
+        fprintf(stderr, "you specified --binom-k without --binom-n\n");
+        exit(1);
+    }
+
     puts("limbs,bits,op,big_ns,gmp_ns,gmp_x,boost_ns,boost_x,binom_n,binom_k");
     for (auto i = conf.limbs.min; i <= conf.limbs.max; i+= conf.step) {
+        auto saved = conf;
+
+        // this is approximately the biggest n choose k that fits
+        if (conf.binom.n == -1 && conf.binom.k == 255) {
+            // not exact but it's close enough
+            auto fits = [&] (u64 n, u64 k) {
+                double estimate = 0;
+                for (u64 i = 1; i <= k; i++)
+                    estimate += std::log2(double(n - i + 1)) - std::log2(double(i));
+                return estimate < i * 64;
+            };
+
+            u64 lo = conf.binom.k; // k choose k = 1 so it fits
+
+            for (u64 hi = -1ul; lo < hi; ) {
+                u64 mid = lo + (hi - lo + 1) / 2;
+
+                if (fits(mid, conf.binom.k))
+                    lo = mid;
+                else
+                    hi = mid - 1;
+            }
+
+            conf.binom.n = lo;
+        }
+
+        // these are pretty much arbitrary
+        if (conf.iters.add == -1)
+            conf.iters.add = std::max(200'000ul, 50'000'000 / i);
+        if (conf.iters.mul == -1)
+            conf.iters.mul = std::max(1'000ul, 10'000'000 / i);
+        if (conf.iters.binom == -1)
+            conf.iters.binom = std::max(100ul, 5'000'000 / (i * (conf.binom.k ?: 1)));
+
+        printf("# conf: step=%lu rounds=%lu "
+               "limbs={%lu %lu} iters{%lu %lu %lu} binom{%lu %lu}\n",
+               conf.step, conf.rounds,
+               conf.limbs.min, conf.limbs.max,
+               conf.iters.add, conf.iters.mul, conf.iters.binom,
+               conf.binom.n, conf.binom.k);
+
         auto timeit = [&](auto &impl) {
+            conf.rng = saved.rng;
+
             auto t0 = std::chrono::steady_clock::now();
             impl.add(conf);   auto t1 = std::chrono::steady_clock::now();
             impl.mul(conf);   auto t2 = std::chrono::steady_clock::now();
             impl.binom(conf); auto t3 = std::chrono::steady_clock::now();
-            impl.times = {
+
+            decltype(impl.times) current {
                 (t1-t0).count() * 1. / conf.iters.add,
                 (t2-t1).count() * 1. / conf.iters.mul,
                 (t3-t2).count() * 1. / conf.iters.binom,
             };
+
+            // keep the best of n runs
+            impl.times.add   = std::min(impl.times.add  , current.add  );
+            impl.times.mul   = std::min(impl.times.mul  , current.mul  );
+            impl.times.binom = std::min(impl.times.binom, current.binom);
         };
-        timeit(bench[i].big);
-        timeit(bench[i].gmp);
-        timeit(bench[i].boost);
+
+        for (u64 r = 0; r < conf.rounds; r++) {
+            timeit(bench[i].big);
+            timeit(bench[i].gmp);
+            timeit(bench[i].boost);
+        }
 
 //               i,bits,op, big, gmp,  x, boost,  x,   n,  k
         printf("%lu,%lu,add,%.3f,%.3f,%.3f,%.3f,%.3f,n/a,n/a\n",
@@ -115,5 +177,8 @@ int main(int argc, char **argv) {
                 bench[i].gmp  .times.binom, bench[i].big.times.binom / bench[i].gmp  .times.binom,
                 bench[i].boost.times.binom, bench[i].big.times.binom / bench[i].boost.times.binom,
                 conf.binom.n, conf.binom.k);
+        fflush(stdout);
+
+        conf = saved;
     }
 }

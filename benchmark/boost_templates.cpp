@@ -13,16 +13,17 @@ using boost_uint = mp::number<mp::cpp_int_backend<
 template <int limbs>
 static auto make_boost(const config& conf) {
     boost_uint<limbs> x;
-    x.backend().resize(limbs, limbs); // should not actually allocate
-    conf.rng.fill(reinterpret_cast<u64*>(x.backend().limbs()), limbs);
-    x.backend().normalize();
+    auto& backend = x.backend();
+    backend.resize(limbs, limbs); // should not actually allocate
+    conf.rng.fill(reinterpret_cast<u64*>(backend.limbs()), limbs);
+    backend.normalize();
     return x;
 }
 
 template <int limbs>
 static u64 hash_boost(const boost_uint<limbs>& value) {
-    auto const& backend = value.backend();
-    auto const* words = reinterpret_cast<const u64*>(backend.limbs());
+    auto& backend = value.backend();
+    auto *words = reinterpret_cast<const u64*>(backend.limbs());
     auto n = backend.size();
 
     u64 acc = 0x6a09e667f3bcc909;
@@ -33,8 +34,7 @@ static u64 hash_boost(const boost_uint<limbs>& value) {
 
 template <int limbs>
 u64 boost_add(const config &conf) {
-    boost_uint<limbs> x = make_boost<limbs>(conf),
-                      y = make_boost<limbs>(conf);
+    auto x = make_boost<limbs>(conf), y = make_boost<limbs>(conf);
 
     for (u64 i = 0; i < conf.iters.add; i++) {
         x += y;
@@ -48,9 +48,7 @@ u64 boost_add(const config &conf) {
 
 template <int limbs>
 u64 boost_mul(const config &conf) {
-    boost_uint<limbs> x = make_boost<limbs>(conf),
-                      y = make_boost<limbs>(conf);
-    y |= 1;
+    auto x = make_boost<limbs>(conf), y = make_boost<limbs>(conf) | 1;
 
     for (u64 i = 0; i < conf.iters.mul; i++) {
         x *= y;
@@ -70,6 +68,8 @@ u64 boost_binom(const config &conf) {
     // which is apparently the recommended way to do it
     // https://stackoverflow.com/a/33027607
     auto binomial = [](this auto&& self, u64 n, u64 k) -> boost_uint<limbs> {
+        if (n - k < k)
+            k = n - k;
         if (k == 0)
             return 1;
         return (n * self(n - 1, k - 1)) / k;

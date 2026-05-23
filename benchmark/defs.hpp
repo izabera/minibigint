@@ -32,8 +32,8 @@ struct config {
 
     u64 step = 4, rounds = 5;
     struct { u64 min, max; } limbs { 4, 80 };
-    struct { u64 add, mul, binom; } iters { -1ul, -1ul };
-    struct { u64 n, k; } binom { -1ul, -1ul };
+    struct { u64 add, mul, binom; } iters { -1ul, -1ul, -1ul };
+    struct { u64 n, k; } binom { -1ul, 255 };
     config(int argc, char **argv);
 };
 
