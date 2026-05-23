@@ -69,7 +69,7 @@ static inline u64 binom_n_for_iter(u64 n, u64 k, u64 i) {
     return n - delta;
 }
 
-static volatile u64 sink;
+inline volatile u64 sink;
 
 struct buf {
     u64 data[MAXLIMBS];

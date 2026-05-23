@@ -8,7 +8,7 @@ using u128 = __uint128_t;
 
 // this part is here to avoid reinstantiating it 300 times
 namespace detail {
-constexpr static u32 oddprimes[] {
+constexpr inline u32 oddprimes[] {
           3,  5,  7, 11, 13, 17, 19, 23,
      29, 31, 37, 41, 43, 47, 53, 59, 61,
      67, 71, 73, 79, 83, 89, 97,101,103,
@@ -17,7 +17,7 @@ constexpr static u32 oddprimes[] {
     199,211,223,227,229,233,239,241,251,
 };
 
-constexpr static auto inverses = [] {
+constexpr inline auto inverses = [] {
     struct { u64 inverses[256]; } table{};
 
     // newton
@@ -38,15 +38,15 @@ constexpr static auto inverses = [] {
 
 // ughhhhhhhhhhh
 [[maybe_unused]] __attribute__((always_inline))
-constexpr static unsigned long addc(unsigned long x, unsigned long y,
-                                    unsigned long c, unsigned long *out) {
+constexpr unsigned long addc(unsigned long x, unsigned long y,
+                             unsigned long c, unsigned long *out) {
       return __builtin_addcl(x, y, c, out);
 }
 
 [[maybe_unused]] __attribute__((always_inline))
-constexpr static unsigned long long addc(unsigned long long x, unsigned long long y,
-                                         unsigned long long c,
-                                         unsigned long long *out) {
+constexpr unsigned long long addc(unsigned long long x, unsigned long long y,
+                                  unsigned long long c,
+                                  unsigned long long *out) {
     return __builtin_addcll(x, y, c, out);
 }
 
