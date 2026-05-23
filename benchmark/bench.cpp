@@ -1,8 +1,10 @@
+#include <algorithm>
+#include <chrono>
 #include <cmath>
-#include <string>
 #include <cstdio>
 #include <cstdlib>
-#include <chrono>
+#include <limits>
+#include <string>
 
 #include "defs.hpp"
 
@@ -13,21 +15,19 @@
     {   big_add<n>,   big_mul<n>,   big_binom<n>, }, \
 },
 
+#define MAXROUNDS 10
+constexpr static auto inf = std::numeric_limits<double>::infinity();
+struct times { double add = inf, mul = inf, binom = inf; };
 struct {
     struct {
         u64 (*add  )(const config&);
         u64 (*mul  )(const config&);
         u64 (*binom)(const config&);
-        struct { double add, mul, binom; } times {
-            std::numeric_limits<double>::infinity(),
-            std::numeric_limits<double>::infinity(),
-            std::numeric_limits<double>::infinity(),
-        };
+        times all[MAXROUNDS], best, mean, median;
     } gmp, boost, big;
-} bench[] { {}, {}, {}, {}, ALL(X) };
+} static bench[] { {}, {}, {}, {}, ALL(X) };
 
 #undef X
-
 
 
 config::config(int argc, char **argv) {
@@ -89,8 +89,20 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
+    if (conf.step == 0) {
+        fprintf(stderr, "invalid step\n");
+        exit(1);
+    }
+
+    if (conf.rounds > MAXROUNDS || conf.rounds == 0)
+        conf.rounds = MAXROUNDS;
+
+    printf("# step=%lu rounds=%lu seed=%lu limbs={%lu %lu}\n",
+           conf.step, conf.rounds, conf.rng.state,
+           conf.limbs.min, conf.limbs.max);
+
     puts("limbs,bits,op,big_ns,gmp_ns,gmp_x,boost_ns,boost_x,binom_n,binom_k");
-    for (auto i = conf.limbs.min; i <= conf.limbs.max; i+= conf.step) {
+    for (auto i = conf.limbs.min; i <= conf.limbs.max; i += conf.step) {
         auto saved = conf;
 
         // this is approximately the biggest n choose k that fits
@@ -118,48 +130,60 @@ int main(int argc, char **argv) {
         }
 
         // these are pretty much arbitrary
-        if (conf.iters.add == -1)
-            conf.iters.add = std::max(200'000ul, 50'000'000 / i);
-        if (conf.iters.mul == -1)
-            conf.iters.mul = std::max(1'000ul, 10'000'000 / i);
-        if (conf.iters.binom == -1)
-            conf.iters.binom = std::max(100ul, 5'000'000 / (i * (conf.binom.k ?: 1)));
+        auto clamp = [](auto& var, u64 base, u64 calc) {
+            if (var == -1)
+                var = std::max(base, calc);
+        };
+        clamp(conf.iters.add  , 200'000, 50'000'000 / i);
+        clamp(conf.iters.mul  ,   1'000, 10'000'000 / i);
+        clamp(conf.iters.binom,     100,  5'000'000 / (i * (conf.binom.k ?: 1)));
 
-        printf("# conf: step=%lu rounds=%lu "
-               "limbs={%lu %lu} iters{%lu %lu %lu} binom{%lu %lu}\n",
-               conf.step, conf.rounds,
-               conf.limbs.min, conf.limbs.max,
+        printf("# iters={%lu %lu %lu} binom={%lu %lu}\n",
                conf.iters.add, conf.iters.mul, conf.iters.binom,
                conf.binom.n, conf.binom.k);
 
-        auto timeit = [&](auto &impl) {
-            conf.rng = saved.rng;
+        for (u64 r = 0; r < conf.rounds; r++) {
+            struct cksum { u64 add, mul, binom; };
+            auto timeit = [&](auto &impl) {
+                conf.rng = saved.rng;
 
-            struct { u64 add, mul, binom; } cksum;
+                cksum cksum;
+                auto tick = std::chrono::steady_clock::now;
+                auto t0 = tick();
+                cksum.add   = impl.add  (conf); auto t1 = tick();
+                cksum.mul   = impl.mul  (conf); auto t2 = tick();
+                cksum.binom = impl.binom(conf); auto t3 = tick();
 
-            auto t0 = std::chrono::steady_clock::now();
-            cksum.add   = impl.add(conf);   auto t1 = std::chrono::steady_clock::now();
-            cksum.mul   = impl.mul(conf);   auto t2 = std::chrono::steady_clock::now();
-            cksum.binom = impl.binom(conf); auto t3 = std::chrono::steady_clock::now();
+                times current {
+                    (t1-t0).count() * 1. / conf.iters.add  ,
+                    (t2-t1).count() * 1. / conf.iters.mul  ,
+                    (t3-t2).count() * 1. / conf.iters.binom,
+                };
 
-            decltype(impl.times) current {
-                (t1-t0).count() * 1. / conf.iters.add,
-                (t2-t1).count() * 1. / conf.iters.mul,
-                (t3-t2).count() * 1. / conf.iters.binom,
+                impl.all[r].add   = current.add  ;
+                impl.all[r].mul   = current.mul  ;
+                impl.all[r].binom = current.binom;
+
+                return cksum;
             };
 
-            // keep the best of n runs
-            impl.times.add   = std::min(impl.times.add  , current.add  );
-            impl.times.mul   = std::min(impl.times.mul  , current.mul  );
-            impl.times.binom = std::min(impl.times.binom, current.binom);
+            cksum ckbig, ckgmp, ckboost;
 
-            return cksum;
-        };
+            // run them in a random order
+            enum { run_big, run_gmp, run_boost } order[] { run_big, run_gmp, run_boost };
 
-        for (u64 r = 0; r < conf.rounds; r++) {
-            auto big   = timeit(bench[i].big);
-            auto gmp   = timeit(bench[i].gmp);
-            auto boost = timeit(bench[i].boost);
+            auto rng = saved.rng; // copy the rng so the runs see the same values
+            rng.state ^= i; rng.gen();
+            rng.state ^= r; rng.gen();
+
+            std::shuffle(order, order + 3, rng);
+            for (auto which : order) {
+                switch (which) {
+                    case run_big  : ckbig   = timeit(bench[i].big  ); break;
+                    case run_gmp  : ckgmp   = timeit(bench[i].gmp  ); break;
+                    case run_boost: ckboost = timeit(bench[i].boost); break;
+                }
+            }
 
             auto check = [&](const char *op, u64 b, u64 g, u64 x) {
                 if (b == g && b == x)
@@ -172,29 +196,56 @@ int main(int argc, char **argv) {
                 exit(1);
             };
 
-            check("add"  , big.add  , gmp.add  , boost.add  );
-            check("mul"  , big.mul  , gmp.mul  , boost.mul  );
-            check("binom", big.binom, gmp.binom, boost.binom);
+            check("add"  , ckbig.add  , ckgmp.add  , ckboost.add  );
+            check("mul"  , ckbig.mul  , ckgmp.mul  , ckboost.mul  );
+            check("binom", ckbig.binom, ckgmp.binom, ckboost.binom);
         }
 
-//               i,bits,op, big, gmp,  x, boost,  x,   n,  k
-        printf("%lu,%lu,add,%.3f,%.3f,%.3f,%.3f,%.3f,n/a,n/a\n",
-                i, i * 64,
-                bench[i].big  .times.add,
-                bench[i].gmp  .times.add, bench[i].big.times.add / bench[i].gmp  .times.add,
-                bench[i].boost.times.add, bench[i].big.times.add / bench[i].boost.times.add);
+        auto stats = [&](auto& impl) {
+            auto fieldstats = [&](double times::*field) {
+                double vals[MAXROUNDS], sum = 0;
 
-        printf("%lu,%lu,mul,%.3f,%.3f,%.3f,%.3f,%.3f,n/a,n/a\n",
-                i, i * 64,
-                bench[i].big  .times.mul,
-                bench[i].gmp  .times.mul, bench[i].big.times.mul / bench[i].gmp  .times.mul,
-                bench[i].boost.times.mul, bench[i].big.times.mul / bench[i].boost.times.mul);
+                for (u64 r = 0; r < conf.rounds; r++) {
+                    vals[r] = impl.all[r].*field;
+                    sum += vals[i];
+                }
 
-        printf("%lu,%lu,binom,%.3f,%.3f,%.3f,%.3f,%.3f,%lu,%lu\n",
-                i, i * 64,
-                bench[i].big  .times.binom,
-                bench[i].gmp  .times.binom, bench[i].big.times.binom / bench[i].gmp  .times.binom,
-                bench[i].boost.times.binom, bench[i].big.times.binom / bench[i].boost.times.binom,
+                std::sort(vals, vals + conf.rounds);
+
+                auto mid = conf.rounds / 2;
+                impl.best  .*field = vals[0];
+                impl.mean  .*field = sum / conf.rounds;
+                impl.median.*field = conf.rounds % 2 ?
+                                     impl.all[mid].*field :
+                                    (impl.all[mid-1].*field + impl.all[mid].*field) / 2;
+            };
+            fieldstats(&times::add  );
+            fieldstats(&times::mul  );
+            fieldstats(&times::binom);
+        };
+        stats(bench[i].big  );
+        stats(bench[i].gmp  );
+        stats(bench[i].boost);
+
+#ifndef FIELD
+#define FIELD median // pick the most interesting one between mean/median/best
+#endif
+
+//               i,bits, op, big, gmp,  x, boost,  x,  n, k
+        printf("%lu,%lu,add,%.3f,%.3f,%.3f,%.3f,%.3f,n/a,n/a\n", i, i * 64,
+                bench[i].big  .FIELD.add,
+                bench[i].gmp  .FIELD.add, bench[i].big.FIELD.add / bench[i].gmp  .FIELD.add,
+                bench[i].boost.FIELD.add, bench[i].big.FIELD.add / bench[i].boost.FIELD.add);
+
+        printf("%lu,%lu,mul,%.3f,%.3f,%.3f,%.3f,%.3f,n/a,n/a\n", i, i * 64,
+                bench[i].big  .FIELD.mul,
+                bench[i].gmp  .FIELD.mul, bench[i].big.FIELD.mul / bench[i].gmp  .FIELD.mul,
+                bench[i].boost.FIELD.mul, bench[i].big.FIELD.mul / bench[i].boost.FIELD.mul);
+
+        printf("%lu,%lu,binom,%.3f,%.3f,%.3f,%.3f,%.3f,%lu,%lu\n", i, i * 64,
+                bench[i].big  .FIELD.binom,
+                bench[i].gmp  .FIELD.binom, bench[i].big.FIELD.binom / bench[i].gmp  .FIELD.binom,
+                bench[i].boost.FIELD.binom, bench[i].big.FIELD.binom / bench[i].boost.FIELD.binom,
                 conf.binom.n, conf.binom.k);
         fflush(stdout);
 

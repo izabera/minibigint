@@ -15,7 +15,7 @@ struct pcg {
     u64 state, inc = 99999;
     u32 gen() {
         auto old = state;
-        state = old * 6364136223846793005 + inc;
+        state = old * 0x5851f42d4c957f2d + inc;
         u32 xs = ((old >> 18) ^ old) >> 27;
         u32 rot = old >> 59;
         return (xs >> rot) | (xs << ((-rot) & 31));
@@ -25,6 +25,12 @@ struct pcg {
         for (u64 i = 0; i < size; i++)
             ptr[i] = gen64();
     }
+
+    // to use it with stl stuff
+    using result_type = u32;
+    static constexpr u32 min() { return 0; }
+    static constexpr u32 max() { return -1; }
+    u32 operator()() { return gen(); }
 };
 
 struct config {
@@ -37,7 +43,7 @@ struct config {
     config(int argc, char **argv);
 };
 
-static inline auto fmix64(u64 k) {
+static inline u64 fmix64(u64 k) {
     k ^= k >> 33;
     k *= 0xff51afd7ed558ccd;
     k ^= k >> 33;
