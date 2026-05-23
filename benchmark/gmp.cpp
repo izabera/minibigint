@@ -22,6 +22,7 @@ void __gmpn_mullo_n(mp_ptr, mp_srcptr, mp_srcptr, mp_size_t);
 
 u64 gmp_mul_impl(const config& conf, int limbs) {
     buf x(conf, limbs), y(conf, limbs), acc;
+    y.data[0] |= 1;
 
     if (__gmpn_mullo_n) {
         for (u64 i = 0; i < conf.iters.mul; i++) {

@@ -22,9 +22,10 @@ u64 big_mul(const config &conf) {
     big<limbs> x, y;
     conf.rng.fill(x.words, limbs);
     conf.rng.fill(y.words, limbs);
+    y.words[0] |= 1;
 
     for (u64 i = 0; i < conf.iters.mul; i++) {
-        x += y;
+        x *= y;
         asm volatile("":"+m"(x)::"memory");
     }
 

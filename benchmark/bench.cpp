@@ -80,36 +80,36 @@ int main(int argc, char **argv) {
     auto conf = config(argc, argv);
 
     puts("limbs,bits,op,big_ns,gmp_ns,gmp_x,boost_ns,boost_x,binom_n,binom_k");
-    for (auto i = 4; i <= MAXLIMBS; i++) {
+    for (auto i = conf.limbs.min; i <= conf.limbs.max; i+= conf.step) {
         auto timeit = [&](auto &impl) {
             auto t0 = std::chrono::steady_clock::now();
             impl.add(conf);   auto t1 = std::chrono::steady_clock::now();
             impl.mul(conf);   auto t2 = std::chrono::steady_clock::now();
             impl.binom(conf); auto t3 = std::chrono::steady_clock::now();
             impl.times = {
-                (t1-t0).count() / 1e9,
-                (t2-t1).count() / 1e9,
-                (t3-t2).count() / 1e9,
+                (t1-t0).count() * 1. / conf.iters.add,
+                (t2-t1).count() * 1. / conf.iters.mul,
+                (t3-t2).count() * 1. / conf.iters.binom,
             };
         };
         timeit(bench[i].big);
         timeit(bench[i].gmp);
         timeit(bench[i].boost);
 
-//              i bits,op,big, gmp,  x   boost x    n   k
-        printf("%d,%d,add,%.3f,%.3f,%.3f,%.3f,%.3f,n/a,n/a\n",
+//               i,bits,op, big, gmp,  x, boost,  x,   n,  k
+        printf("%lu,%lu,add,%.3f,%.3f,%.3f,%.3f,%.3f,n/a,n/a\n",
                 i, i * 64,
                 bench[i].big  .times.add,
                 bench[i].gmp  .times.add, bench[i].big.times.add / bench[i].gmp  .times.add,
                 bench[i].boost.times.add, bench[i].big.times.add / bench[i].boost.times.add);
 
-        printf("%d,%d,mul,%.3f,%.3f,%.3f,%.3f,%.3f,n/a,n/a\n",
+        printf("%lu,%lu,mul,%.3f,%.3f,%.3f,%.3f,%.3f,n/a,n/a\n",
                 i, i * 64,
                 bench[i].big  .times.mul,
                 bench[i].gmp  .times.mul, bench[i].big.times.mul / bench[i].gmp  .times.mul,
                 bench[i].boost.times.mul, bench[i].big.times.mul / bench[i].boost.times.mul);
 
-        printf("%d,%d,binom,%.3f,%.3f,%.3f,%.3f,%.3f,%lu,%lu\n",
+        printf("%lu,%lu,binom,%.3f,%.3f,%.3f,%.3f,%.3f,%lu,%lu\n",
                 i, i * 64,
                 bench[i].big  .times.binom,
                 bench[i].gmp  .times.binom, bench[i].big.times.binom / bench[i].gmp  .times.binom,

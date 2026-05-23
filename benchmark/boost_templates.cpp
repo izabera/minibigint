@@ -10,36 +10,54 @@ using boost_uint = mp::number<mp::cpp_int_backend<
     mp::unchecked,
     void>>;
 
-static u64 *get(auto& b) { return reinterpret_cast<u64*>(b.backend().limbs()); }
+template <int limbs>
+static auto make_boost(const config& conf) {
+    boost_uint<limbs> x;
+    x.backend().resize(limbs, limbs); // should not actually allocate
+    conf.rng.fill(reinterpret_cast<u64*>(x.backend().limbs()), limbs);
+    x.backend().normalize();
+    return x;
+}
+
+template <int limbs>
+static u64 hash_boost(const boost_uint<limbs>& value) {
+    auto const& backend = value.backend();
+    auto const* words = reinterpret_cast<const u64*>(backend.limbs());
+    auto n = backend.size();
+
+    u64 acc = 0x6a09e667f3bcc909;
+    for (u64 i = 0; i < limbs; i++)
+        acc = fmix64(i < n ? words[i] : 0);
+    return acc;
+}
 
 template <int limbs>
 u64 boost_add(const config &conf) {
-    boost_uint<limbs> x, y;
-    conf.rng.fill(get(x), limbs);
-    conf.rng.fill(get(y), limbs);
+    boost_uint<limbs> x = make_boost<limbs>(conf),
+                      y = make_boost<limbs>(conf);
 
     for (u64 i = 0; i < conf.iters.add; i++) {
         x += y;
         asm volatile("":"+m"(x)::"memory");
     }
 
-    auto checksum = hash(get(x), limbs);
+    auto checksum = hash_boost<limbs>(x);
     sink ^= checksum;
     return checksum;
 }
 
 template <int limbs>
 u64 boost_mul(const config &conf) {
-    boost_uint<limbs> x, y;
-    conf.rng.fill(get(x), limbs);
-    conf.rng.fill(get(y), limbs);
+    boost_uint<limbs> x = make_boost<limbs>(conf),
+                      y = make_boost<limbs>(conf);
+    y |= 1;
 
     for (u64 i = 0; i < conf.iters.mul; i++) {
         x *= y;
         asm volatile("":"+m"(x)::"memory");
     }
 
-    auto checksum = hash(get(x), limbs);
+    auto checksum = hash_boost<limbs>(x);
     sink ^= checksum;
     return checksum;
 }
@@ -60,7 +78,7 @@ u64 boost_binom(const config &conf) {
     auto [n, k] = conf.binom;
     for (u64 i = 0; i < conf.iters.binom; i++) {
         auto value = binomial(binom_n_for_iter(n, k, i), k);
-        checksum ^= hash(get(value), limbs) ^ i;
+        checksum ^= hash_boost<limbs>(value) ^ i;
     }
 
     sink ^= checksum;

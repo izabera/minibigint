@@ -37,15 +37,16 @@ struct config {
     config(int argc, char **argv);
 };
 
+static inline auto fmix64(u64 k) {
+    k ^= k >> 33;
+    k *= 0xff51afd7ed558ccd;
+    k ^= k >> 33;
+    k *= 0xc4ceb9fe1a85ec53;
+    k ^= k >> 33;
+    return k;
+}
+
 static inline u64 hash(const u64 *ptr, u64 size) { // something like murmur3
-    auto fmix64 = [](u64 k) {
-        k ^= k >> 33;
-        k *= 0xff51afd7ed558ccd;
-        k ^= k >> 33;
-        k *= 0xc4ceb9fe1a85ec53;
-        k ^= k >> 33;
-        return k;
-    };
 
     u64 acc = 0x6a09e667f3bcc909;
     for (u64 i = 0; i < size; i++)
