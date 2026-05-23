@@ -207,7 +207,7 @@ int main(int argc, char **argv) {
 
                 for (u64 r = 0; r < conf.rounds; r++) {
                     vals[r] = impl.all[r].*field;
-                    sum += vals[i];
+                    sum += vals[r];
                 }
 
                 std::sort(vals, vals + conf.rounds);
@@ -216,8 +216,8 @@ int main(int argc, char **argv) {
                 impl.best  .*field = vals[0];
                 impl.mean  .*field = sum / conf.rounds;
                 impl.median.*field = conf.rounds % 2 ?
-                                     impl.all[mid].*field :
-                                    (impl.all[mid-1].*field + impl.all[mid].*field) / 2;
+                                     vals[mid] :
+                                    (vals[mid-1] + vals[mid]) / 2;
             };
             fieldstats(&times::add  );
             fieldstats(&times::mul  );
@@ -231,22 +231,21 @@ int main(int argc, char **argv) {
 #define FIELD median // pick the most interesting one between mean/median/best
 #endif
 
-//               i,bits, op, big, gmp,  x, boost,  x,  n, k
-        printf("%lu,%lu,add,%.3f,%.3f,%.3f,%.3f,%.3f,n/a,n/a\n", i, i * 64,
+//               i,bits, op, big, gmp,  x, boost,  x
+        printf("%lu,%lu,add,%.3f,%.3f,%.3f,%.3f,%.3f\n", i, i * 64,
                 bench[i].big  .FIELD.add,
                 bench[i].gmp  .FIELD.add, bench[i].big.FIELD.add / bench[i].gmp  .FIELD.add,
                 bench[i].boost.FIELD.add, bench[i].big.FIELD.add / bench[i].boost.FIELD.add);
 
-        printf("%lu,%lu,mul,%.3f,%.3f,%.3f,%.3f,%.3f,n/a,n/a\n", i, i * 64,
+        printf("%lu,%lu,mul,%.3f,%.3f,%.3f,%.3f,%.3f\n", i, i * 64,
                 bench[i].big  .FIELD.mul,
                 bench[i].gmp  .FIELD.mul, bench[i].big.FIELD.mul / bench[i].gmp  .FIELD.mul,
                 bench[i].boost.FIELD.mul, bench[i].big.FIELD.mul / bench[i].boost.FIELD.mul);
 
-        printf("%lu,%lu,binom,%.3f,%.3f,%.3f,%.3f,%.3f,%lu,%lu\n", i, i * 64,
+        printf("%lu,%lu,binom,%.3f,%.3f,%.3f,%.3f,%.3f\n", i, i * 64,
                 bench[i].big  .FIELD.binom,
                 bench[i].gmp  .FIELD.binom, bench[i].big.FIELD.binom / bench[i].gmp  .FIELD.binom,
-                bench[i].boost.FIELD.binom, bench[i].big.FIELD.binom / bench[i].boost.FIELD.binom,
-                conf.binom.n, conf.binom.k);
+                bench[i].boost.FIELD.binom, bench[i].big.FIELD.binom / bench[i].boost.FIELD.binom);
         fflush(stdout);
 
         conf = saved;

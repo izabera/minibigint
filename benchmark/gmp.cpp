@@ -54,6 +54,7 @@ u64 gmp_binom_impl(const config& conf, int limbs) {
         checksum ^= hash(mpz_limbs_read(value), limbs, mpz_size(value)) ^ i;
     }
 
+    mpz_clear(value);
     sink ^= checksum;
     return checksum;
 }
