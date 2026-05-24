@@ -105,6 +105,13 @@ struct big {
         // (this is faster than gmp)
     }
 
+    constexpr big& operator-=(const big& other) {
+        u64 carry = 1;
+        for (auto i = 0; i < limbs; i++)
+            words[i] = addc(words[i], ~other.words[i], carry, &carry);
+        return *this;
+    }
+
     constexpr big operator*(const big& other) const {
         big out;
         u64 carry0 = 0, carry1 = 0;
@@ -129,10 +136,21 @@ struct big {
 
     constexpr bool operator==(const big& other) const = default;
     constexpr bool operator!=(const big& other) const = default;
+    constexpr bool operator<(const big& other) const {
+        for (auto i = limbs-1; i >= 0; i--)
+            if (words[i] != other.words[i])
+                return words[i] < other.words[i];
+        return false;
+    }
 
     constexpr big operator+(const big& other) const {
         auto tmp = *this;
         tmp += other;
+        return tmp;
+    }
+    constexpr big operator-(const big& other) const {
+        auto tmp = *this;
+        tmp -= other;
         return tmp;
     }
     constexpr big& operator*=(const big& other) {
@@ -272,3 +290,7 @@ struct big {
         return C;
     }
 };
+
+static_assert(big<>{1337} + big<>{42} == big<>{1337+42});
+static_assert(big<>{1337} - big<>{42} == big<>{1337-42});
+static_assert(big<>{1337} * big<>{42} == big<>{1337*42});

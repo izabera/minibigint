@@ -36,30 +36,35 @@ static auto print = [](auto b) {
 
 template <auto limbs>
 bool test_arith_size() {
-    big<limbs> a, b;
+    using t = big<limbs>;
+    t a, b;
     for (auto i = 0; i < 200; i++) {
         for (auto& w : a.words) w = u64(pcg.gen()) << 32 | pcg.gen();
         for (auto& w : b.words) w = u64(pcg.gen()) << 32 | pcg.gen();
-
-        big<limbs> sum = a + b, mul = a * b;
-
-        big<limbs> gmpsum;
-        mpn_add_n(gmpsum.words, a.words, b.words, limbs);
-        if (memcmp(&sum.words, &gmpsum.words, sizeof sum.words)) {
-            printf("sum fail - limbs=%d i=%d\n", limbs, i);
-            printf("big: %s\n", print(sum));
-            printf("gmp: %s\n", print(gmpsum));
-            return false;
+        if (a < b) {
+            auto tmp = a;
+            a = b;
+            b = tmp;
         }
 
-        big<limbs*2> gmpmul;
-        mpn_mul_n(gmpmul.words, a.words, b.words, limbs);
-        if (memcmp(&mul.words, &gmpmul.words, sizeof mul.words)) {
-            printf("mul fail - limbs=%d i=%d\n", limbs, i);
-            printf("big: %s\n", print(mul));
-            printf("gmp: %s\n", print(gmpmul));
-            return false;
-        }
+        auto sum = a + b,
+             mul = a * b,
+             sub = a - b;
+
+        auto validate = [&](auto& result, auto gmp, auto op, auto name) {
+            op(gmp.words, a.words, b.words, limbs);
+            if (memcmp(gmp.words, result.words, sizeof result.words)) {
+                printf("%s fail - limbs=%d i=%d\n", name, limbs, i);
+                printf("big: %s\n", print(sum));
+                printf("gmp: %s\n", print(gmp));
+                return false;
+            }
+            return true;
+        };
+        if (!validate(sum, big<limbs  >{}, mpn_add_n, "sum")) return false;
+        if (!validate(mul, big<limbs*2>{}, mpn_mul_n, "mul")) return false;
+        if (!validate(sub, big<limbs  >{}, mpn_sub_n, "sub")) return false;
+        return true;
     }
 
     return true;
