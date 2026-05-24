@@ -188,7 +188,8 @@ struct big {
                 auto need = k / q;
 
                 // first multiple of q in [lo, n]
-                auto m = lo + ((q - lo % q) % q);
+                auto rem = lo % q;
+                auto m = lo + (rem ? q - rem : 0);
 
                 for (auto i = 0; i < need; i++, m += q) {
                     auto &f = factors[m - lo];
