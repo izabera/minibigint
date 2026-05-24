@@ -57,7 +57,27 @@ struct big {
     constexpr big& operator+=(const big& other) {
         u64 carry = 0, i = 0;
 
-        volatile u64* rp = words; // this absolutely has to live in a register
+        if consteval {
+            for ( ; i < limbs; i++)
+                words[i] = addc(words[i], other.words[i], carry, &carry);
+            return *this;
+        }
+
+        // both gcc and clang turn the loop above into a chain of
+        // mov reg, [other+i*8]     # reg = other.words[i]
+        // adc [this+i*8], reg      # words[i] += reg + carry
+        // which seems optimal at a glance, but that adc is rmw
+        //
+        // on my test box (raptorlake), this is measurably slower than
+        // mov reg, [this+i*8]      # reg = words[i]
+        // adc reg, [other+i*8]     # reg += other.words[i] + carry
+        // mov [this+i*8], reg      # words[i] = reg
+        // which can be unrolled, rearranged, and pipelined better
+
+        // unfortunately compilers really don't want to emit that
+        // the only way i found is the following
+        // https://godbolt.org/z/4zcrfh668
+        volatile u64* rp = words; // volatile to force the order of loads
 
         #pragma clang loop unroll(full)
         for ( ; i < (limbs & ~3); i += 4) {
@@ -81,6 +101,8 @@ struct big {
         for (; i < limbs; i++)
             rp[i] = addc(rp[i], other.words[i], carry, &carry);
         return *this;
+
+        // (this is faster than gmp)
     }
 
     constexpr big operator*(const big& other) const {
