@@ -45,6 +45,24 @@ u64 boost_add(const config &conf) {
 }
 
 template <int limbs>
+u64 boost_sub(const config &conf) {
+    auto x = make_boost<limbs>(conf), y = make_boost<limbs>(conf);
+    x.backend().limbs()[limbs-1] = -1;
+    y.backend().limbs()[limbs-1] = 0;
+    x.backend().normalize();
+    y.backend().normalize();
+
+    for (u64 i = 0; i < conf.iters.sub; i++) {
+        x -= y;
+        asm volatile("":"+m"(x)::"memory");
+    }
+
+    auto checksum = hash_boost<limbs>(x);
+    sink ^= checksum;
+    return checksum;
+}
+
+template <int limbs>
 u64 boost_mul(const config &conf) {
     auto x = make_boost<limbs>(conf), y = make_boost<limbs>(conf) | 1;
 
@@ -95,10 +113,12 @@ u64 boost_binom(const config &conf) {
 
 #else
 template <int limbs> u64 boost_add  (const config &) { return {}; }
+template <int limbs> u64 boost_sub  (const config &) { return {}; }
 template <int limbs> u64 boost_mul  (const config &) { return {}; }
 template <int limbs> u64 boost_binom(const config &) { return {}; }
 #endif
 
 template u64 boost_add  <LIMBS>(const config&);
+template u64 boost_sub  <LIMBS>(const config&);
 template u64 boost_mul  <LIMBS>(const config&);
 template u64 boost_binom<LIMBS>(const config&);

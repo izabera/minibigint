@@ -18,6 +18,24 @@ u64 big_add(const config &conf) {
 }
 
 template <int limbs>
+u64 big_sub(const config &conf) {
+    big<limbs> x, y;
+    conf.rng.fill(x.words, limbs);
+    conf.rng.fill(y.words, limbs);
+    x.words[limbs-1] = -1;
+    y.words[limbs-1] = 0;
+
+    for (u64 i = 0; i < conf.iters.sub; i++) {
+        x -= y;
+        asm volatile("":"+m"(x)::"memory");
+    }
+
+    auto checksum = hash(x.words, limbs);
+    sink ^= checksum;
+    return checksum;
+}
+
+template <int limbs>
 u64 big_mul(const config &conf) {
     big<limbs> x, y;
     conf.rng.fill(x.words, limbs);
@@ -50,5 +68,6 @@ u64 big_binom(const config &conf) {
 
 
 template u64 big_add<LIMBS>(const config&);
+template u64 big_sub<LIMBS>(const config&);
 template u64 big_mul<LIMBS>(const config&);
 template u64 big_binom<LIMBS>(const config&);

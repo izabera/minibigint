@@ -38,7 +38,7 @@ struct config {
 
     u64 step = 4, rounds = 5;
     struct { u64 min, max; } limbs { 4, 80 };
-    struct { u64 add, mul, binom; } iters { -1ul, -1ul, -1ul };
+    struct { u64 add, sub, mul, binom; } iters { -1ul, -1ul, -1ul, -1ul };
     struct { u64 n, k; } binom { -1ul, 255 };
     u64 with_boost = 0;
     config(int argc, char **argv);
@@ -87,16 +87,19 @@ struct buf {
 
 // lightweight templates for gmp just to pass the limbs parameter
 template <int limbs> u64   gmp_add  (const config&);
+template <int limbs> u64   gmp_sub  (const config&);
 template <int limbs> u64   gmp_mul  (const config&);
 template <int limbs> u64   gmp_binom(const config&);
 
 // these are lightweight too if you don't pass WITH_BOOST=1
 template <int limbs> u64 boost_add  (const config&);
+template <int limbs> u64 boost_sub  (const config&);
 template <int limbs> u64 boost_mul  (const config&);
 template <int limbs> u64 boost_binom(const config&);
 extern bool with_boost;
 
 template <int limbs> u64   big_add  (const config&);
+template <int limbs> u64   big_sub  (const config&);
 template <int limbs> u64   big_mul  (const config&);
 template <int limbs> u64   big_binom(const config&);
 
