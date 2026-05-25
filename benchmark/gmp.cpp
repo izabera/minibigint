@@ -17,7 +17,7 @@ u64 gmp_sub_impl(const config& conf, int limbs) {
     x[limbs-1] = -1;
     y[limbs-1] = 0;
 
-    for (u64 i = 0; i < conf.iters.add; i++)
+    for (u64 i = 0; i < conf.iters.sub; i++)
         mpn_sub_n(x, x, y, limbs);
 
     auto checksum = hash(x, limbs);

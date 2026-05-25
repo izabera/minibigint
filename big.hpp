@@ -117,11 +117,37 @@ struct big {
     }
 
     constexpr big& operator-=(const big& other) {
-        u64 borrow = 0;
+        u64 borrow = 0, i = 0;
+
+        if consteval {
+            for ( ; i < limbs; i++)
+                words[i] = detail::subc(words[i], other.words[i], borrow, &borrow);
+            return *this;
+        }
+
+        volatile u64* rp = words;
 
         #pragma GCC unroll limbs
-        for (auto i = 0; i < limbs; i++)
-            words[i] = detail::subc(words[i], other.words[i], borrow, &borrow);
+        for ( ; i < (limbs & ~3); i += 4) {
+            u64 r0 = rp[i+0];
+            u64 r1 = rp[i+1];
+            u64 r2 = rp[i+2];
+            u64 r3 = rp[i+3];
+
+            r0 = detail::subc(r0, other.words[i+0], borrow, &borrow);
+            r1 = detail::subc(r1, other.words[i+1], borrow, &borrow);
+            r2 = detail::subc(r2, other.words[i+2], borrow, &borrow);
+            r3 = detail::subc(r3, other.words[i+3], borrow, &borrow);
+
+            rp[i+0] = r0;
+            rp[i+1] = r1;
+            rp[i+2] = r2;
+            rp[i+3] = r3;
+        }
+
+        #pragma GCC unroll limbs
+        for (; i < limbs; i++)
+            rp[i] = detail::subc(rp[i], other.words[i], borrow, &borrow);
         return *this;
     }
 
