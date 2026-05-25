@@ -108,9 +108,24 @@ struct big {
             rp[i+3] = r3;
         }
 
-        #pragma GCC unroll limbs
-        for (; i < limbs; i++)
+        if constexpr ((limbs & 3) == 1) {
             rp[i] = detail::addc(rp[i], other.words[i], carry, &carry);
+        }
+        if constexpr ((limbs & 3) == 2) {
+            u64 r0 = rp[i+0];
+            r0 = detail::addc(r0, other.words[i+0], carry, &carry);
+            words[i+1] = detail::addc(words[i+1], other.words[i+1], carry, &carry);
+            rp[i] = r0;
+        }
+        if constexpr ((limbs & 3) == 3) {
+            u64 r0 = rp[i+0];
+            u64 r1 = rp[i+1];
+            r0 = detail::addc(r0, other.words[i+0], carry, &carry);
+            r1 = detail::addc(r1, other.words[i+1], carry, &carry);
+            words[i+2] = detail::addc(words[i+2], other.words[i+2], carry, &carry);
+            rp[i+0] = r0;
+            rp[i+1] = r1;
+        }
         return *this;
 
         // (this is faster than gmp)
