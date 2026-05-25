@@ -34,20 +34,31 @@ constexpr inline auto inverses = [] {
 
     return table;
 }();
-}
 
 // ughhhhhhhhhhh
+// these can't even be templated easily because then you can't pass int
 [[maybe_unused]] __attribute__((always_inline))
 constexpr unsigned long addc(unsigned long x, unsigned long y,
-                             unsigned long c, unsigned long *out) {
-      return __builtin_addcl(x, y, c, out);
+                             unsigned long in, unsigned long *out) {
+      return __builtin_addcl(x, y, in, out);
 }
 
 [[maybe_unused]] __attribute__((always_inline))
 constexpr unsigned long long addc(unsigned long long x, unsigned long long y,
-                                  unsigned long long c,
-                                  unsigned long long *out) {
-    return __builtin_addcll(x, y, c, out);
+                                  unsigned long long in, unsigned long long *out) {
+    return __builtin_addcll(x, y, in, out);
+}
+[[maybe_unused]] __attribute__((always_inline))
+constexpr unsigned long subc(unsigned long x, unsigned long y,
+                             unsigned long in, unsigned long *out) {
+      return __builtin_subcl(x, y, in, out);
+}
+
+[[maybe_unused]] __attribute__((always_inline))
+constexpr unsigned long long subc(unsigned long long x, unsigned long long y,
+                                  unsigned long long in, unsigned long long *out) {
+    return __builtin_subcll(x, y, in, out);
+}
 }
 
 template <int limbs = 4>
@@ -59,7 +70,7 @@ struct big {
 
         if consteval {
             for ( ; i < limbs; i++)
-                words[i] = addc(words[i], other.words[i], carry, &carry);
+                words[i] = detail::addc(words[i], other.words[i], carry, &carry);
             return *this;
         }
 
@@ -79,17 +90,17 @@ struct big {
         // https://godbolt.org/z/4zcrfh668
         volatile u64* rp = words; // volatile to force the order of loads
 
-        #pragma clang loop unroll(full)
+        #pragma GCC unroll limbs
         for ( ; i < (limbs & ~3); i += 4) {
             u64 r0 = rp[i+0];
             u64 r1 = rp[i+1];
             u64 r2 = rp[i+2];
             u64 r3 = rp[i+3];
 
-            r0 = addc(r0, other.words[i+0], carry, &carry);
-            r1 = addc(r1, other.words[i+1], carry, &carry);
-            r2 = addc(r2, other.words[i+2], carry, &carry);
-            r3 = addc(r3, other.words[i+3], carry, &carry);
+            r0 = detail::addc(r0, other.words[i+0], carry, &carry);
+            r1 = detail::addc(r1, other.words[i+1], carry, &carry);
+            r2 = detail::addc(r2, other.words[i+2], carry, &carry);
+            r3 = detail::addc(r3, other.words[i+3], carry, &carry);
 
             rp[i+0] = r0;
             rp[i+1] = r1;
@@ -97,18 +108,20 @@ struct big {
             rp[i+3] = r3;
         }
 
-        #pragma clang loop unroll(full)
+        #pragma GCC unroll limbs
         for (; i < limbs; i++)
-            rp[i] = addc(rp[i], other.words[i], carry, &carry);
+            rp[i] = detail::addc(rp[i], other.words[i], carry, &carry);
         return *this;
 
         // (this is faster than gmp)
     }
 
     constexpr big& operator-=(const big& other) {
-        u64 carry = 1;
+        u64 borrow = 0;
+
+        #pragma GCC unroll limbs
         for (auto i = 0; i < limbs; i++)
-            words[i] = addc(words[i], ~other.words[i], carry, &carry);
+            words[i] = detail::subc(words[i], other.words[i], borrow, &borrow);
         return *this;
     }
 
@@ -122,8 +135,8 @@ struct big {
                 auto p = u128(words[j]) * other.words[i-j];
                 u64 p_lo = p, p_hi = p >> 64, c = 0;
 
-                lo = addc(lo, p_lo, 0, &c);
-                hi = addc(hi, p_hi, c, &c);
+                lo = detail::addc(lo, p_lo, 0, &c);
+                hi = detail::addc(hi, p_hi, c, &c);
                 top += c;
             }
 
@@ -211,7 +224,7 @@ struct big {
         // so we precompute a table of all the factors, without trailing zeros
         // their product is n choose k * k! / 2^v2
         u64 factors[256];
-        for (auto i = 0; i < k; i++) {
+        for (auto i = 0u; i < k; i++) {
             auto f = n - k + 1 + i;
             factors[i] = f >> __builtin_ctzg(f);
         }
@@ -231,7 +244,7 @@ struct big {
                 auto rem = lo % q;
                 auto m = lo + (rem ? q - rem : 0);
 
-                for (auto i = 0; i < need; i++, m += q) {
+                for (auto i = 0u; i < need; i++, m += q) {
                     auto &f = factors[m - lo];
                     // if (m - lo >= k) throw;
 
@@ -256,7 +269,7 @@ struct big {
                 C.words[++last] = carry;
         };
 
-        for (auto i = 0; i < k; i++) {
+        for (auto i = 0u; i < k; i++) {
             auto f = factors[i];
             if (f <= 1)
                 continue;

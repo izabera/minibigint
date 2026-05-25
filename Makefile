@@ -1,6 +1,6 @@
 OPTFLAGS = -O3 -march=native
 CXXFLAGS = $(OPTFLAGS) $(SANITIZE)
-override CXXFLAGS += -ggdb3 -std=c++23 -MMD -MP
+override CXXFLAGS += -ggdb3 -std=c++23 -MMD -MP -Wall -Wextra
 CXX = clang++
 LINK.o = $(CXX) $(LDFLAGS)
 
