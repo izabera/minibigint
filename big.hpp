@@ -6,7 +6,6 @@ using u32 = uint32_t;
 using u64 = uint64_t;
 using u128 = __uint128_t;
 
-// this part is here to avoid reinstantiating it 300 times
 namespace detail {
 constexpr inline u32 oddprimes[] {
           3,  5,  7, 11, 13, 17, 19, 23,
@@ -18,18 +17,19 @@ constexpr inline u32 oddprimes[] {
 };
 
 constexpr inline auto inverses = [] {
-    struct { u64 inverses[256]; } table{};
+    struct { u64 inverses[sizeof oddprimes/sizeof *oddprimes]; } table;
+    auto ptr = table.inverses;
 
     // newton
-    for (auto i = 3; i < 256; i += 2) {
-        u64 x = i; // valid inverse mod 8 for odd d
-        x *= 2 - i * x;
-        x *= 2 - i * x;
-        x *= 2 - i * x;
-        x *= 2 - i * x;
-        x *= 2 - i * x;
-        x *= 2 - i * x;
-        table.inverses[i] = x;
+    for (auto p : oddprimes) {
+        u64 x = p; // valid inverse mod 8 for odd p
+        x *= 2 - p * x;
+        x *= 2 - p * x;
+        x *= 2 - p * x;
+        x *= 2 - p * x;
+        x *= 2 - p * x;
+        x *= 2 - p * x;
+        *ptr++ = x;
     }
 
     return table;
@@ -258,7 +258,8 @@ struct big {
         // then remove all their factors in common with k!
         auto lo = n - k + 1;
 
-        for (auto p : oddprimes) {
+        for (auto i = 0u; i < sizeof oddprimes/sizeof *oddprimes; i++) {
+            auto p = oddprimes[i];
             if (p > k)
                 break;
 
@@ -270,11 +271,11 @@ struct big {
                 auto rem = lo % q;
                 auto m = lo + (rem ? q - rem : 0);
 
-                for (auto i = 0u; i < need; i++, m += q) {
+                for (auto j = 0u; j < need; j++, m += q) {
                     auto &f = factors[m - lo];
                     // if (m - lo >= k) throw;
 
-                    f *= inverses.inverses[p]; // f /= p
+                    f *= inverses.inverses[i]; // f /= p
                 }
             }
         }
