@@ -221,7 +221,7 @@ struct big {
 
         if (n - k < k)
             k = n - k;
-        if (k > n || k > 255)
+        if (k > n || k > 256)
             return {};
 
         switch (u64 tmp; k) {
@@ -246,7 +246,7 @@ struct big {
         //                == pop(k) + pop(n-k) - pop(n)
         u64 v2 = __builtin_popcountg(k) + __builtin_popcountg(n-k) - __builtin_popcountg(n);
 
-        // we only need to support n choose k with k in 1..255
+        // we only need to support n choose k with k in 1..256
         // so we precompute a table of all the factors, without trailing zeros
         // their product is n choose k * k! / 2^v2
         u64 factors[256];
@@ -313,7 +313,7 @@ struct big {
 
         // then multiply by 2^v2
         // this is similar to operator<<=, with a few optimisations:
-        // since n < 2^64 and k<256, the maximum v2 is 63, so whole == 0
+        // since n < 2^64 and k<=256, the maximum v2 is 63, so whole == 0
         // also we know we can stop at last
         if (v2) {
             u64 carry = 0;
