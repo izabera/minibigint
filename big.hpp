@@ -414,6 +414,7 @@ struct big {
 
         auto step = [&] {
             u64 carry = 0;
+            #pragma GCC unroll 8
             for (auto i = 0; i <= last; i++) { // don't iterate over zeros
                 auto tmp = u128(C.words[i]) * acc + carry;
                 C.words[i] = tmp;
