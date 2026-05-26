@@ -56,12 +56,15 @@ template <int limbs>
 u64 big_binom(const config &conf) {
     u64 checksum = 0;
     auto [n, k] = conf.binom;
+    big<limbs> result;
 
     for (u64 i = 0; i < conf.iters.binom; i++) {
-        auto result = big<limbs>::binom(binom_n_for_iter(n, k, i), k);
-        checksum ^= hash(result.words, limbs) ^ i;
+        result = big<limbs>::binom(binom_n_for_iter(n, k, i), k);
+        asm volatile("":"+m"(result)::"memory");
+        // checksum ^= hash(result.words, limbs) ^ i;
     }
 
+    checksum = hash(result.words, limbs);
     sink ^= checksum;
     return checksum;
 }

@@ -102,11 +102,13 @@ u64 boost_binom(const config &conf) {
     };
 
     auto [n, k] = conf.binom;
+    boost_uint<limbs> value;
     for (u64 i = 0; i < conf.iters.binom; i++) {
-        auto value = binomial(binom_n_for_iter(n, k, i), k);
-        checksum ^= hash_boost<limbs>(value) ^ i;
+        value = binomial(binom_n_for_iter(n, k, i), k);
+        // checksum ^= hash_boost<limbs>(value) ^ i;
     }
 
+    checksum = hash_boost<limbs>(value);
     sink ^= checksum;
     return checksum;
 }
