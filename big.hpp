@@ -344,67 +344,30 @@ struct big {
         // then remove all their factors in common with k!
         auto lo = n - k + 1;
 
-        // printf("%lu choose %lu\n", n, k);
-#if OLD || 1
-        // old impl
-        for (auto i = 0u; i < oddprimes.size(); i++) {
-            u64 p = oddprimes[i];
-            u64 inv = table.inverses[i];
-            // printf("prime %lu inverse %lu\n", p, inv);
-            if (p > k)
-                break;
-
-            // loop over the powers of p
-            for (u64 q = p; q <= k; q *= p) {
-                u64 need = k / q;
-                auto rem = lo % q;
-                auto m = lo + (rem ? q - rem : 0);
-                // printf("q=%lu need=%lu rem=%lu m=%lu\n", q, need, rem, m);
-
-                // first multiple of q in [lo, n]
-                for (auto j = 0u; j < need; j++, m += q) {
-                    auto &f = factors[m - lo];
-                    // printf("j=%u f=%lu\n", j, f);
-                    f *= inv; // f /= p
-                }
-            }
-        }
-#else
-        // new impl that should behave identically
-        // for q in powers3
-        //     need = need3[k][q]
-        //     for i in 1..need
-        //         f *= inv[3]
-
-        auto it = [&] (u64 p, u64 inv, const auto& powers, const auto& needs) {
-            // printf("prime %lu inverse %lu\n", p, inv);
+        auto remove = [&] (u64 p, u64 inv, const auto& powers, const auto& needs) {
             if (p > k)
                 return;
             for (u64 i = 0; i < powers.size(); i++) {
-                u64 q = powers[i];
                 u64 need = needs[i];
                 if (!need)
                     break;
+                u64 q = powers[i];
                 u64 rem = lo % q;
                 u64 m = lo + (rem ? q - rem : 0);
-                // printf("q=%lu need=%lu rem=%lu m=%lu\n", q, need, rem, m);
                 for (auto j = 0u; j < need; j++, m += q) {
                     auto &f = factors[m - lo];
-                    // printf("j=%u f=%lu\n", j, f);
                     f *= inv; // f /= p
                 }
             }
         };
-        it( 3, table.inverses[0], p3 , table.needs[k].need3 );
-        it( 5, table.inverses[1], p5 , table.needs[k].need5 );
-        it( 7, table.inverses[2], p7 , table.needs[k].need7 );
-        it(11, table.inverses[3], p11, table.needs[k].need11);
-        it(13, table.inverses[4], p13, table.needs[k].need13);
+        remove( 3, table.inverses[0], p3 , table.needs[k].need3 );
+        remove( 5, table.inverses[1], p5 , table.needs[k].need5 );
+        remove( 7, table.inverses[2], p7 , table.needs[k].need7 );
+        remove(11, table.inverses[3], p11, table.needs[k].need11);
+        remove(13, table.inverses[4], p13, table.needs[k].need13);
 
         for (auto i = 0u, base = 5u; i < rest.size(); i++) {
             u64 p = rest[i];
-            u64 inv = table.inverses[i+base];
-            // printf("prime %lu inverse %lu - rest\n", p, inv);
             if (p > k)
                 break;
             u64 need = table.needs[k].needx[i];
@@ -412,30 +375,14 @@ struct big {
                 break;
             u64 rem = lo % p;
             u64 m = lo + (rem ? p - rem : 0);
-            // printf("q=%lu need=%lu rem=%lu m=%lu\n", p, need, rem, m);
+            u64 inv = table.inverses[i+base];
             for (auto j = 0u; j < need; j++, m += p) {
                 auto &f = factors[m - lo];
-                // printf("j=%u f=%lu\n", j, f);
-                f *= inv; // f /= p
+                f *= inv;
             }
         }
-#endif
-        // auto debug = [&] {
-        //     auto print = [&](auto i) {
-        //         printf("%2lx,%2lx,%2lx,%2lx, %2lx,%2lx,%2lx,%2lx, %2lx,%2lx,%2lx,%2lx, %2lx,%2lx,%2lx,%2lx\n",
-        //                 factors[i*16+ 0], factors[i*16+ 1], factors[i*16+ 2], factors[i*16+ 3],
-        //                 factors[i*16+ 4], factors[i*16+ 5], factors[i*16+ 6], factors[i*16+ 7],
-        //                 factors[i*16+ 8], factors[i*16+ 9], factors[i*16+10], factors[i*16+11],
-        //                 factors[i*16+12], factors[i*16+13], factors[i*16+14], factors[i*16+15]);
-        //     };
-        //     printf("n=%lu k=%lu\n", n, k);
-        //     for (auto i = 0; i < 16; i++)
-        //         print(i);
-        // };
 
-        // debug();
-
-        // multiply them all up
+        // multiply all the remaining factors up
 
         int last = 0;
         u64 acc = 1; // batch things
