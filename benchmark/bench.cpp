@@ -48,12 +48,14 @@ config::config(int argc, char **argv) {
             "             [--step limbs] [--rounds n] [--seed n]\n"
             "             [--add-iters n] [--sub-iters n] [--mul-iters n] [--binom-iters n]\n"
             "             [--binom-n n] [--binom-k k]\n"
+            "             [--verbose n]\n"
             "             [--boost n]\n"
             "\n"
             "defaults: --min 4 --max 80\n"
             "          --step 4 --rounds 5 --seed 1234567\n"
             "          --binom-k 255\n"
             "          --boost %d\n"
+            "          --verbose 0\n"
             "          auto select binom n based on k\n"
             "          auto select iters based on limbs\n", int(with_boost)
         );
@@ -83,7 +85,8 @@ config::config(int argc, char **argv) {
             !match("binom-iters", iters.binom) &&
             !match("binom-n"    , binom.n    ) &&
             !match("binom-k"    , binom.k    ) &&
-            !match("boost"      , with_boost ))
+            !match("boost"      , with_boost ) &&
+            !match("verbose"    , verbose    ))
             usage(1);
     }
 
@@ -108,13 +111,17 @@ int main(int argc, char **argv) {
         conf.rounds = MAXROUNDS;
 
     conf.with_boost = conf.with_boost && with_boost;
-    printf("# boost=%d\n", int(conf.with_boost));
 
-    printf("# step=%lu rounds=%lu seed=%lu limbs={%lu %lu}\n",
+    if (conf.verbose) {
+        printf("# boost=%d\n", int(conf.with_boost));
+
+        printf("# step=%lu rounds=%lu seed=%lu limbs={%lu %lu}\n",
            conf.step, conf.rounds, conf.rng.state,
            conf.limbs.min, conf.limbs.max);
 
-    puts("limbs,bits,op,big_ns,gmp_ns,gmp_x,boost_ns,boost_x,binom_n,binom_k");
+        puts("limbs,bits,op,big_ns,gmp_ns,gmp_x,boost_ns,boost_x,binom_n,binom_k");
+    }
+
     for (auto i = conf.limbs.min; i <= conf.limbs.max; i += conf.step) {
         auto saved = conf;
 
@@ -149,10 +156,11 @@ int main(int argc, char **argv) {
         };
         clamp(conf.iters.add  , 200'000, 50'000'000 / i);
         clamp(conf.iters.sub  , 200'000, 50'000'000 / i);
-        clamp(conf.iters.mul  ,   1'000, 10'000'000 / i);
-        clamp(conf.iters.binom,     100,  5'000'000 / (i * (conf.binom.k ?: 1)));
+        clamp(conf.iters.mul  ,   1'000, 10'000'000 / (i * std::log2(i)));
+        clamp(conf.iters.binom,   1'000, 10'000'000 / (i * (conf.binom.k ?: 1)));
 
-        printf("# iters={%lu %lu %lu %lu} binom={%lu %lu}\n",
+        if (conf.verbose)
+            printf("# iters={%lu %lu %lu %lu} binom={%lu %lu}\n",
                conf.iters.add, conf.iters.sub, conf.iters.mul, conf.iters.binom,
                conf.binom.n, conf.binom.k);
 
@@ -253,43 +261,58 @@ int main(int argc, char **argv) {
 #endif
 
         if (conf.with_boost) {
-//                   i,bits, op, big, gmp,  x, boost,  x
-            printf("%lu,%lu,add,%.3f,%.3f,%.3f,%.3f,%.3f\n", i, i * 64,
-                bench[i].big  .FIELD.add,
-                bench[i].gmp  .FIELD.add, bench[i].big.FIELD.add / bench[i].gmp  .FIELD.add,
-                bench[i].boost.FIELD.add, bench[i].big.FIELD.add / bench[i].boost.FIELD.add);
+            if (conf.iters.add) {
+                printf("%lu,%lu,add,%.3f,%.3f,%.3f,%.3f,%.3f\n", i, i * 64,
+                    bench[i].big  .FIELD.add,
+                    bench[i].gmp  .FIELD.add, bench[i].big.FIELD.add / bench[i].gmp  .FIELD.add,
+                    bench[i].boost.FIELD.add, bench[i].big.FIELD.add / bench[i].boost.FIELD.add);
+            }
 
-            printf("%lu,%lu,sub,%.3f,%.3f,%.3f,%.3f,%.3f\n", i, i * 64,
-                bench[i].big  .FIELD.sub,
-                bench[i].gmp  .FIELD.sub, bench[i].big.FIELD.sub / bench[i].gmp  .FIELD.sub,
-                bench[i].boost.FIELD.sub, bench[i].big.FIELD.sub / bench[i].boost.FIELD.sub);
+            if (conf.iters.sub) {
+                printf("%lu,%lu,sub,%.3f,%.3f,%.3f,%.3f,%.3f\n", i, i * 64,
+                    bench[i].big  .FIELD.sub,
+                    bench[i].gmp  .FIELD.sub, bench[i].big.FIELD.sub / bench[i].gmp  .FIELD.sub,
+                    bench[i].boost.FIELD.sub, bench[i].big.FIELD.sub / bench[i].boost.FIELD.sub);
+            }
 
-            printf("%lu,%lu,mul,%.3f,%.3f,%.3f,%.3f,%.3f\n", i, i * 64,
-                bench[i].big  .FIELD.mul,
-                bench[i].gmp  .FIELD.mul, bench[i].big.FIELD.mul / bench[i].gmp  .FIELD.mul,
-                bench[i].boost.FIELD.mul, bench[i].big.FIELD.mul / bench[i].boost.FIELD.mul);
+            if (conf.iters.mul) {
+                printf("%lu,%lu,mul,%.3f,%.3f,%.3f,%.3f,%.3f\n", i, i * 64,
+                    bench[i].big  .FIELD.mul,
+                    bench[i].gmp  .FIELD.mul, bench[i].big.FIELD.mul / bench[i].gmp  .FIELD.mul,
+                    bench[i].boost.FIELD.mul, bench[i].big.FIELD.mul / bench[i].boost.FIELD.mul);
+            }
 
-            printf("%lu,%lu,binom,%.3f,%.3f,%.3f,%.3f,%.3f\n", i, i * 64,
-                bench[i].big  .FIELD.binom,
-                bench[i].gmp  .FIELD.binom, bench[i].big.FIELD.binom / bench[i].gmp  .FIELD.binom,
-                bench[i].boost.FIELD.binom, bench[i].big.FIELD.binom / bench[i].boost.FIELD.binom);
+            if (conf.iters.binom) {
+                printf("%lu,%lu,binom,%.3f,%.3f,%.3f,%.3f,%.3f\n", i, i * 64,
+                    bench[i].big  .FIELD.binom,
+                    bench[i].gmp  .FIELD.binom, bench[i].big.FIELD.binom / bench[i].gmp  .FIELD.binom,
+                    bench[i].boost.FIELD.binom, bench[i].big.FIELD.binom / bench[i].boost.FIELD.binom);
+            }
         }
         else {
-            printf("%lu,%lu,add,%.3f,%.3f,%.3f,n/a,n/a\n", i, i * 64,
-                bench[i].big.FIELD.add,
-                bench[i].gmp.FIELD.add, bench[i].big.FIELD.add / bench[i].gmp.FIELD.add);
+            if (conf.iters.add) {
+                printf("%lu,%lu,add,%.3f,%.3f,%.3f,n/a,n/a\n", i, i * 64,
+                    bench[i].big.FIELD.add,
+                    bench[i].gmp.FIELD.add, bench[i].big.FIELD.add / bench[i].gmp.FIELD.add);
+            }
 
-            printf("%lu,%lu,sub,%.3f,%.3f,%.3f,n/a,n/a\n", i, i * 64,
-                bench[i].big.FIELD.sub,
-                bench[i].gmp.FIELD.sub, bench[i].big.FIELD.sub / bench[i].gmp.FIELD.sub);
+            if (conf.iters.sub) {
+                printf("%lu,%lu,sub,%.3f,%.3f,%.3f,n/a,n/a\n", i, i * 64,
+                    bench[i].big.FIELD.sub,
+                    bench[i].gmp.FIELD.sub, bench[i].big.FIELD.sub / bench[i].gmp.FIELD.sub);
+            }
 
-            printf("%lu,%lu,mul,%.3f,%.3f,%.3f,n/a,n/a\n", i, i * 64,
-                bench[i].big.FIELD.mul,
-                bench[i].gmp.FIELD.mul, bench[i].big.FIELD.mul / bench[i].gmp.FIELD.mul);
+            if (conf.iters.mul) {
+                printf("%lu,%lu,mul,%.3f,%.3f,%.3f,n/a,n/a\n", i, i * 64,
+                    bench[i].big.FIELD.mul,
+                    bench[i].gmp.FIELD.mul, bench[i].big.FIELD.mul / bench[i].gmp.FIELD.mul);
+            }
 
-            printf("%lu,%lu,binom,%.3f,%.3f,%.3f,n/a,n/a\n", i, i * 64,
-                bench[i].big.FIELD.binom,
-                bench[i].gmp.FIELD.binom, bench[i].big.FIELD.binom / bench[i].gmp.FIELD.binom);
+            if (conf.iters.binom) {
+                printf("%lu,%lu,binom,%.3f,%.3f,%.3f,n/a,n/a\n", i, i * 64,
+                    bench[i].big.FIELD.binom,
+                    bench[i].gmp.FIELD.binom, bench[i].big.FIELD.binom / bench[i].gmp.FIELD.binom);
+            }
         }
         fflush(stdout);
 

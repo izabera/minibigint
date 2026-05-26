@@ -41,6 +41,7 @@ struct config {
     struct { u64 add, sub, mul, binom; } iters { -1ul, -1ul, -1ul, -1ul };
     struct { u64 n, k; } binom { -1ul, 255 };
     u64 with_boost = 0;
+    u64 verbose = 0;
     config(int argc, char **argv);
 };
 
