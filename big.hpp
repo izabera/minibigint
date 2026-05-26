@@ -73,7 +73,7 @@ constexpr inline std::array<u8,48> rest {
     167,173,179,181,191,193,197,199,
     211,223,227,229,233,239,241,251,
 };
-struct needk { // XXX: maybe alignas(64) ?
+struct alignas(64) needk {
     u8 need3 [p3  .size()];
     u8 need5 [p5  .size()];
     u8 need7 [p7  .size()];
@@ -91,6 +91,17 @@ struct needk { // XXX: maybe alignas(64) ?
     }
 };
 
+consteval auto newton(u64 p) {
+    u64 x = p; // valid inverse mod 8 for odd p
+    x *= 2 - p * x;
+    x *= 2 - p * x;
+    x *= 2 - p * x;
+    x *= 2 - p * x;
+    x *= 2 - p * x;
+    x *= 2 - p * x;
+    return x;
+}
+
 constexpr inline auto table = [] {
     struct {
         needk needs[257];
@@ -100,23 +111,44 @@ constexpr inline auto table = [] {
     for (auto i = 0; i < 257; i++)
         table.needs[i] = i;
 
-    // newton
-    for (auto i = 0u; i < oddprimes.size(); i++) {
-        auto p = oddprimes[i];
-        u64 x = p; // valid inverse mod 8 for odd p
-        x *= 2 - p * x;
-        x *= 2 - p * x;
-        x *= 2 - p * x;
-        x *= 2 - p * x;
-        x *= 2 - p * x;
-        x *= 2 - p * x;
-        table.inverses[i] = x;
-    }
+    for (auto i = 0u; i < oddprimes.size(); i++)
+        table.inverses[i] = newton(oddprimes[i]);
     return table;
 }();
 
+// also, a bunch of helpers that don't get inlined otherwise
+consteval u64 recip(u64 d) { return u64((u128(1) << 64) / d); }
 
-// ughhhhhhhhhhh
+template <u64 d>
+[[maybe_unused]] __attribute__((always_inline))
+constexpr u64 mod(u64 n) { // barret division
+    constexpr u64 m = recip(d);
+    u64 q = u128(n) * m >> 64;
+    u64 r = n - q * d;
+    return r >= d ? r - d : r;
+}
+
+template <u64 d>
+[[maybe_unused]] __attribute__((always_inline))
+constexpr u64 multiple(u64 lo) {
+    u64 r = mod<d>(lo);
+    return r ? d - r : 0; // first multiple of q that's >= lo
+}
+
+template <u64 p>
+[[maybe_unused]] __attribute__((always_inline))
+constexpr u64 div(u64 x) { return x * newton(p); }
+
+template <u64 p, u64 q>
+[[maybe_unused]] __attribute__((always_inline))
+constexpr void remove_power(u64 lo, u64 need, u64 *factors) {
+    if (!need)
+        return;
+
+    for (u64 idx = multiple<q>(lo), j = 0; j < need; j++, idx += q)
+        factors[idx] = div<p>(factors[idx]);
+}
+
 // these can't even be templated easily because then you can't pass int
 [[maybe_unused]] __attribute__((always_inline))
 constexpr unsigned long addc(unsigned long x, unsigned long y,
@@ -142,11 +174,6 @@ constexpr unsigned long long subc(unsigned long long x, unsigned long long y,
 }
 }
 
-template <int n>
-struct primeinfo {
-    u8 powers[n];
-    u8 need[256][n];
-};
 template <int limbs = 4>
 struct big {
     u64 words[limbs]; // little endian
@@ -335,7 +362,7 @@ struct big {
         // we only need to support n choose k with k in 1..256
         // so we precompute a table of all the factors, without trailing zeros
         // their product is n choose k * k! / 2^v2
-        u64 factors[256]{};
+        u64 factors[256];
         for (auto i = 0u; i < k; i++) {
             auto f = n - k + 1 + i;
             factors[i] = f >> __builtin_ctzg(f);
@@ -343,34 +370,32 @@ struct big {
 
         // then remove all their factors in common with k!
         auto lo = n - k + 1;
+        auto& needs = table.needs[k];
 
-        auto remove = [&] (u64 p, u64 inv, const auto& powers, const auto& needs) {
-            if (p > k)
-                return;
-            for (u64 i = 0; i < powers.size(); i++) {
-                u64 need = needs[i];
-                if (!need)
-                    break;
-                u64 q = powers[i];
-                u64 rem = lo % q;
-                u64 m = lo + (rem ? q - rem : 0);
-                for (auto j = 0u; j < need; j++, m += q) {
-                    auto &f = factors[m - lo];
-                    f *= inv; // f /= p
-                }
-            }
-        };
-        remove( 3, table.inverses[0], p3 , table.needs[k].need3 );
-        remove( 5, table.inverses[1], p5 , table.needs[k].need5 );
-        remove( 7, table.inverses[2], p7 , table.needs[k].need7 );
-        remove(11, table.inverses[3], p11, table.needs[k].need11);
-        remove(13, table.inverses[4], p13, table.needs[k].need13);
+        remove_power< 3,   3>(lo, needs.need3 [0], factors);
+        remove_power< 3,   9>(lo, needs.need3 [1], factors);
+        remove_power< 3,  27>(lo, needs.need3 [2], factors);
+        remove_power< 3,  81>(lo, needs.need3 [3], factors);
+        remove_power< 3, 243>(lo, needs.need3 [4], factors);
+
+        remove_power< 5,   5>(lo, needs.need5 [0], factors);
+        remove_power< 5,  25>(lo, needs.need5 [1], factors);
+        remove_power< 5, 125>(lo, needs.need5 [2], factors);
+
+        remove_power< 7,   7>(lo, needs.need7 [0], factors);
+        remove_power< 7,  49>(lo, needs.need7 [1], factors);
+
+        remove_power<11,  11>(lo, needs.need11[0], factors);
+        remove_power<11, 121>(lo, needs.need11[1], factors);
+
+        remove_power<13,  13>(lo, needs.need13[0], factors);
+        remove_power<13, 169>(lo, needs.need13[1], factors);
 
         for (auto i = 0u, base = 5u; i < rest.size(); i++) {
             u64 p = rest[i];
             if (p > k)
                 break;
-            u64 need = table.needs[k].needx[i];
+            u64 need = needs.needx[i];
             if (!need)
                 break;
             u64 rem = lo % p;
