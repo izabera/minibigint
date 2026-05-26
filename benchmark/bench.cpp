@@ -119,8 +119,8 @@ int main(int argc, char **argv) {
            conf.step, conf.rounds, conf.rng.state,
            conf.limbs.min, conf.limbs.max);
 
-        puts("limbs,bits,op,big_ns,gmp_ns,gmp_x,boost_ns,boost_x,binom_n,binom_k");
     }
+    puts("limbs,bits,op,big_ns,gmp_ns,gmp_x,boost_ns,boost_x,binom_n,binom_k");
 
     for (auto i = conf.limbs.min; i <= conf.limbs.max; i += conf.step) {
         auto saved = conf;
