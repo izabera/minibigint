@@ -163,6 +163,17 @@ auto test_binoms() {
         if (!check.operator()<70>((1<<24)+255, k))
             return false;
 
+    for (u64 n : { (1ull << 56) - 300,
+                   (1ull << 56) - 1,
+                   (1ull << 56),
+                   (1ull << 56) + 300,
+                   (1ull << 63) + 123456789ull,
+                   ~0ull - 1024 }) {
+        for (u64 k : {3ull, 17ull, 127ull, 255ull}) {
+            if (!check.operator()<300>(n, k))
+                return false;
+        }
+    }
     return true;
 }
 

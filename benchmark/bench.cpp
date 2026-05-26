@@ -172,10 +172,10 @@ int main(int argc, char **argv) {
                 cksum cksum;
                 auto tick = std::chrono::steady_clock::now;
                 auto t0 = tick();
-                cksum.add   = impl.add  (conf); auto t1 = tick();
-                cksum.sub   = impl.sub  (conf); auto t2 = tick();
-                cksum.mul   = impl.mul  (conf); auto t3 = tick();
-                cksum.binom = impl.binom(conf); auto t4 = tick();
+                cksum.add   = conf.iters.add   ? impl.add  (conf) : 0; auto t1 = tick();
+                cksum.sub   = conf.iters.sub   ? impl.sub  (conf) : 0; auto t2 = tick();
+                cksum.mul   = conf.iters.mul   ? impl.mul  (conf) : 0; auto t3 = tick();
+                cksum.binom = conf.iters.binom ? impl.binom(conf) : 0; auto t4 = tick();
 
                 times current {
                     (t1-t0).count() * 1. / conf.iters.add  ,

@@ -115,6 +115,7 @@ constexpr inline auto table = [] {
     struct {
         needk needs[257];
         u64 inverses[oddprimes.size()];
+        u64 lemire[lowp.size()+highp.size()];
     } table;
 
     for (auto i = 0; i < 257; i++)
@@ -122,6 +123,10 @@ constexpr inline auto table = [] {
 
     for (auto i = 0u; i < oddprimes.size(); i++)
         table.inverses[i] = newton(oddprimes[i]);
+    for (auto i = 0u; i < lowp.size(); i++)
+        table.lemire[i] = u64(-1) / lowp[i] + 1;
+    for (auto i = 0u; i < highp.size(); i++)
+        table.lemire[i+lowp.size()] = u64(-1) / highp[i] + 1;
     return table;
 }();
 
@@ -153,6 +158,33 @@ template <u64 p, u64 q>
 constexpr void remove_power(u64 lo, u64 need, u64 *factors) {
     for (u64 idx = multiple<q>(lo), j = 0; j < need; j++, idx += q)
         factors[idx] = div<p>(factors[idx]);
+}
+
+[[maybe_unused]] __attribute__((always_inline))
+constexpr void remove_rest(u64 lo, u64 k, u64 *factors, auto mod) {
+    u64 base = 5;
+    for (auto i = 0u; i < lowp.size(); i++) {
+        u64 p = lowp[i];
+        if (p > k)
+            break;
+        u64 need = table.needs[k].needx[i]; // non zero because p <= k
+        u64 rem = mod(lo, p, i);
+        u64 m = lo + (rem ? p - rem : 0);
+        u64 inv = table.inverses[i+base];
+        for (auto j = 0u; j < need; j++, m += p)
+            factors[m - lo] *= inv;
+    }
+
+    base += lowp.size();
+    for (auto i = 0u; i < highp.size(); i++) {
+        u64 p = highp[i];
+        if (p > k)
+            break;
+        u64 rem = mod(lo, p, i+lowp.size());
+        u64 m = lo + (rem ? p - rem : 0);
+        u64 inv = table.inverses[i+base];
+        factors[m - lo] *= inv;
+    }
 }
 
 // these can't even be templated easily because then you can't pass int
@@ -397,29 +429,15 @@ struct big {
         remove_power<13,  13>(lo, needs.need13[0], factors);
         remove_power<13, 169>(lo, needs.need13[1], factors);
 
-        auto base = 5;
-        for (auto i = 0u; i < lowp.size(); i++) {
-            u64 p = lowp[i];
-            if (p > k)
-                break;
-            u64 need = needs.needx[i]; // non zero because p <= k
-            u64 rem = lo % p;
-            u64 m = lo + (rem ? p - rem : 0);
-            u64 inv = table.inverses[i+base];
-            for (auto j = 0u; j < need; j++, m += p)
-                factors[m - lo] *= inv;
-        }
-
-        base += lowp.size();
-        for (auto i = 0u; i < highp.size(); i++) {
-            u64 p = highp[i];
-            if (p > k)
-                break;
-            u64 rem = lo % p;
-            u64 m = lo + (rem ? p - rem : 0);
-            u64 inv = table.inverses[i+base];
-            factors[m - lo] *= inv;
-        }
+        // switch to lemire fastmod where possible
+        if (lo >> 56) [[unlikely]]
+            remove_rest(lo, k, factors,
+                [] (auto lo, auto p, auto) { return lo % p; });
+        else
+            remove_rest(lo, k, factors,
+                [] (auto lo, auto p, auto i) -> u64 {
+                    return (u128(table.lemire[i] * lo) * p) >> 64;
+                });
 
         // multiply all the remaining factors up
 
