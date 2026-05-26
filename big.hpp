@@ -36,17 +36,23 @@ namespace detail {
 
   repeat for power5, powers7, powers11, powers13
 
-  and finally, the other 48 odd primes
+  and finally, the other 48 odd primes:
+  for primes <= 127, need can be greater than 1:
 
-  for p in rest of the primes
+  for p in lowprimes
       need = need[k][p]
       for i in 1..need
           f *= inv[p]
 
+  the remaining primes are all > 128, so need can only be 1:
+
+  for p in highprimes
+      f *= inv[p]
+
   "wait, isn't that too many tables?  does it even fit in l1?"
   thanks for asking, yes it does:
   each need table uses 256 * number of powers of p
-  so this part fits in 15872 bytes
+  so this part fits in 9984 bytes (+ alignment etc)
 
   also, we will only access entries for the same k, so we group by k first
   the results is as follows
@@ -65,11 +71,14 @@ constexpr inline std::array<u8, 3> p5   { 5, 25, 125 };
 constexpr inline std::array<u8, 2> p7   { 7, 49 };
 constexpr inline std::array<u8, 2> p11  { 11,121 };
 constexpr inline std::array<u8, 2> p13  { 13,169 };
-constexpr inline std::array<u8,48> rest {
+constexpr inline std::array<u8,25> lowp {
      17, 19, 23, 29, 31, 37, 41, 43,
      47, 53, 59, 61, 67, 71, 73, 79,
      83, 89, 97,101,103,107,109,113,
-    127,131,137,139,149,151,157,163,
+    127,
+};
+constexpr inline std::array<u8,23> highp {
+        131,137,139,149,151,157,163,
     167,173,179,181,191,193,197,199,
     211,223,227,229,233,239,241,251,
 };
@@ -79,7 +88,7 @@ struct alignas(64) needk {
     u8 need7 [p7  .size()];
     u8 need11[p11 .size()];
     u8 need13[p13 .size()];
-    u8 needx [rest.size()];
+    u8 needx [lowp.size()];
     constexpr needk() {}
     constexpr needk(int k) {
         for (auto i = 0u; i < p3  .size(); i++) need3 [i] = k / p3  [i];
@@ -87,7 +96,7 @@ struct alignas(64) needk {
         for (auto i = 0u; i < p7  .size(); i++) need7 [i] = k / p7  [i];
         for (auto i = 0u; i < p11 .size(); i++) need11[i] = k / p11 [i];
         for (auto i = 0u; i < p13 .size(); i++) need13[i] = k / p13 [i];
-        for (auto i = 0u; i < rest.size(); i++) needx [i] = k / rest[i];
+        for (auto i = 0u; i < lowp.size(); i++) needx [i] = k / lowp[i];
     }
 };
 
@@ -142,9 +151,6 @@ constexpr u64 div(u64 x) { return x * newton(p); }
 template <u64 p, u64 q>
 [[maybe_unused]] __attribute__((always_inline))
 constexpr void remove_power(u64 lo, u64 need, u64 *factors) {
-    if (!need)
-        return;
-
     for (u64 idx = multiple<q>(lo), j = 0; j < need; j++, idx += q)
         factors[idx] = div<p>(factors[idx]);
 }
@@ -391,20 +397,28 @@ struct big {
         remove_power<13,  13>(lo, needs.need13[0], factors);
         remove_power<13, 169>(lo, needs.need13[1], factors);
 
-        for (auto i = 0u, base = 5u; i < rest.size(); i++) {
-            u64 p = rest[i];
+        auto base = 5;
+        for (auto i = 0u; i < lowp.size(); i++) {
+            u64 p = lowp[i];
             if (p > k)
                 break;
-            u64 need = needs.needx[i];
-            if (!need)
+            u64 need = needs.needx[i]; // non zero because p <= k
+            u64 rem = lo % p;
+            u64 m = lo + (rem ? p - rem : 0);
+            u64 inv = table.inverses[i+base];
+            for (auto j = 0u; j < need; j++, m += p)
+                factors[m - lo] *= inv;
+        }
+
+        base += lowp.size();
+        for (auto i = 0u; i < highp.size(); i++) {
+            u64 p = highp[i];
+            if (p > k)
                 break;
             u64 rem = lo % p;
             u64 m = lo + (rem ? p - rem : 0);
             u64 inv = table.inverses[i+base];
-            for (auto j = 0u; j < need; j++, m += p) {
-                auto &f = factors[m - lo];
-                f *= inv;
-            }
+            factors[m - lo] *= inv;
         }
 
         // multiply all the remaining factors up
