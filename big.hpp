@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 using u8 = uint8_t;
 using u32 = uint32_t;
@@ -7,23 +8,101 @@ using u64 = uint64_t;
 using u128 = __uint128_t;
 
 namespace detail {
-constexpr inline auto nprimes = 53;
+
+/*
+  in the binomial we'll need to do this
+
+  for p in primes
+      for q in powers of p
+          need = k/q
+          for i in 1..need
+              f *= inv[p]
+
+  with k<=256 we can precalculate all possible powers and all values of need
+  but obviously there are more powers that fit <=256 for small primes
+  which is kind of annoying, you'd need to jump at variable offsets etc
+
+  instead we can split things manually, and special case all the primes with
+  more than 1 power <= 256:
+  3 has 5 powers
+  5 has 3 powers
+  7, 11 and 13 have 2 powers
+  everything else has 1
+
+  for q in powers3
+      need = need3[k][q]
+      for i in 1..need
+          f *= inv[3]
+
+  repeat for power5, powers7, powers11, powers13
+
+  and finally, the other 48 odd primes
+
+  for p in rest of the primes
+      need = need[k][p]
+      for i in 1..need
+          f *= inv[p]
+
+  "wait, isn't that too many tables?  does it even fit in l1?"
+  thanks for asking, yes it does:
+  each need table uses 256 * number of powers of p
+  so this part fits in 15872 bytes
+
+  also, we will only access entries for the same k, so we group by k first
+  the results is as follows
+*/
+
+constexpr inline std::array<u8,53> oddprimes {
+          3,  5,  7, 11, 13, 17, 19, 23,
+     29, 31, 37, 41, 43, 47, 53, 59, 61,
+     67, 71, 73, 79, 83, 89, 97,101,103,
+    107,109,113,127,131,137,139,149,151,
+    157,163,167,173,179,181,191,193,197,
+    199,211,223,227,229,233,239,241,251,
+};
+constexpr inline std::array<u8, 5> p3   { 3, 9, 27, 81, 243 };
+constexpr inline std::array<u8, 3> p5   { 5, 25, 125 };
+constexpr inline std::array<u8, 2> p7   { 7, 49 };
+constexpr inline std::array<u8, 2> p11  { 11,121 };
+constexpr inline std::array<u8, 2> p13  { 13,169 };
+constexpr inline std::array<u8,48> rest {
+     17, 19, 23, 29, 31, 37, 41, 43,
+     47, 53, 59, 61, 67, 71, 73, 79,
+     83, 89, 97,101,103,107,109,113,
+    127,131,137,139,149,151,157,163,
+    167,173,179,181,191,193,197,199,
+    211,223,227,229,233,239,241,251,
+};
+struct needk { // XXX: maybe alignas(64) ?
+    u8 need3 [p3  .size()];
+    u8 need5 [p5  .size()];
+    u8 need7 [p7  .size()];
+    u8 need11[p11 .size()];
+    u8 need13[p13 .size()];
+    u8 needx [rest.size()];
+    constexpr needk() {}
+    constexpr needk(int k) {
+        for (auto i = 0u; i < p3  .size(); i++) need3 [i] = k / p3  [i];
+        for (auto i = 0u; i < p5  .size(); i++) need5 [i] = k / p5  [i];
+        for (auto i = 0u; i < p7  .size(); i++) need7 [i] = k / p7  [i];
+        for (auto i = 0u; i < p11 .size(); i++) need11[i] = k / p11 [i];
+        for (auto i = 0u; i < p13 .size(); i++) need13[i] = k / p13 [i];
+        for (auto i = 0u; i < rest.size(); i++) needx [i] = k / rest[i];
+    }
+};
+
 constexpr inline auto table = [] {
-    struct table {
-        u32 oddprimes[nprimes] {
-                  3,  5,  7, 11, 13, 17, 19, 23,
-             29, 31, 37, 41, 43, 47, 53, 59, 61,
-             67, 71, 73, 79, 83, 89, 97,101,103,
-            107,109,113,127,131,137,139,149,151,
-            157,163,167,173,179,181,191,193,197,
-            199,211,223,227,229,233,239,241,251,
-        };
-        u64 inverses[nprimes];
+    struct {
+        needk needs[257];
+        u64 inverses[oddprimes.size()];
     } table;
-    auto ptr = table.inverses;
+
+    for (auto i = 0; i < 257; i++)
+        table.needs[i] = i;
 
     // newton
-    for (auto p : table.oddprimes) {
+    for (auto i = 0u; i < oddprimes.size(); i++) {
+        auto p = oddprimes[i];
         u64 x = p; // valid inverse mod 8 for odd p
         x *= 2 - p * x;
         x *= 2 - p * x;
@@ -31,11 +110,11 @@ constexpr inline auto table = [] {
         x *= 2 - p * x;
         x *= 2 - p * x;
         x *= 2 - p * x;
-        *ptr++ = x;
+        table.inverses[i] = x;
     }
-
     return table;
 }();
+
 
 // ughhhhhhhhhhh
 // these can't even be templated easily because then you can't pass int
@@ -63,6 +142,11 @@ constexpr unsigned long long subc(unsigned long long x, unsigned long long y,
 }
 }
 
+template <int n>
+struct primeinfo {
+    u8 powers[n];
+    u8 need[256][n];
+};
 template <int limbs = 4>
 struct big {
     u64 words[limbs]; // little endian
@@ -251,7 +335,7 @@ struct big {
         // we only need to support n choose k with k in 1..256
         // so we precompute a table of all the factors, without trailing zeros
         // their product is n choose k * k! / 2^v2
-        u64 factors[256];
+        u64 factors[256]{};
         for (auto i = 0u; i < k; i++) {
             auto f = n - k + 1 + i;
             factors[i] = f >> __builtin_ctzg(f);
@@ -260,27 +344,96 @@ struct big {
         // then remove all their factors in common with k!
         auto lo = n - k + 1;
 
-        for (auto i = 0u; i < nprimes; i++) {
-            auto p = table.oddprimes[i];
+        // printf("%lu choose %lu\n", n, k);
+#if OLD || 1
+        // old impl
+        for (auto i = 0u; i < oddprimes.size(); i++) {
+            u64 p = oddprimes[i];
+            u64 inv = table.inverses[i];
+            // printf("prime %lu inverse %lu\n", p, inv);
             if (p > k)
                 break;
 
             // loop over the powers of p
-            for (auto q = p; q <= k; q *= p) {
-                auto need = k / q;
-
-                // first multiple of q in [lo, n]
+            for (u64 q = p; q <= k; q *= p) {
+                u64 need = k / q;
                 auto rem = lo % q;
                 auto m = lo + (rem ? q - rem : 0);
+                // printf("q=%lu need=%lu rem=%lu m=%lu\n", q, need, rem, m);
 
+                // first multiple of q in [lo, n]
                 for (auto j = 0u; j < need; j++, m += q) {
                     auto &f = factors[m - lo];
-                    // if (m - lo >= k) throw;
-
-                    f *= table.inverses[i]; // f /= p
+                    // printf("j=%u f=%lu\n", j, f);
+                    f *= inv; // f /= p
                 }
             }
         }
+#else
+        // new impl that should behave identically
+        // for q in powers3
+        //     need = need3[k][q]
+        //     for i in 1..need
+        //         f *= inv[3]
+
+        auto it = [&] (u64 p, u64 inv, const auto& powers, const auto& needs) {
+            // printf("prime %lu inverse %lu\n", p, inv);
+            if (p > k)
+                return;
+            for (u64 i = 0; i < powers.size(); i++) {
+                u64 q = powers[i];
+                u64 need = needs[i];
+                if (!need)
+                    break;
+                u64 rem = lo % q;
+                u64 m = lo + (rem ? q - rem : 0);
+                // printf("q=%lu need=%lu rem=%lu m=%lu\n", q, need, rem, m);
+                for (auto j = 0u; j < need; j++, m += q) {
+                    auto &f = factors[m - lo];
+                    // printf("j=%u f=%lu\n", j, f);
+                    f *= inv; // f /= p
+                }
+            }
+        };
+        it( 3, table.inverses[0], p3 , table.needs[k].need3 );
+        it( 5, table.inverses[1], p5 , table.needs[k].need5 );
+        it( 7, table.inverses[2], p7 , table.needs[k].need7 );
+        it(11, table.inverses[3], p11, table.needs[k].need11);
+        it(13, table.inverses[4], p13, table.needs[k].need13);
+
+        for (auto i = 0u, base = 5u; i < rest.size(); i++) {
+            u64 p = rest[i];
+            u64 inv = table.inverses[i+base];
+            // printf("prime %lu inverse %lu - rest\n", p, inv);
+            if (p > k)
+                break;
+            u64 need = table.needs[k].needx[i];
+            if (!need)
+                break;
+            u64 rem = lo % p;
+            u64 m = lo + (rem ? p - rem : 0);
+            // printf("q=%lu need=%lu rem=%lu m=%lu\n", p, need, rem, m);
+            for (auto j = 0u; j < need; j++, m += p) {
+                auto &f = factors[m - lo];
+                // printf("j=%u f=%lu\n", j, f);
+                f *= inv; // f /= p
+            }
+        }
+#endif
+        // auto debug = [&] {
+        //     auto print = [&](auto i) {
+        //         printf("%2lx,%2lx,%2lx,%2lx, %2lx,%2lx,%2lx,%2lx, %2lx,%2lx,%2lx,%2lx, %2lx,%2lx,%2lx,%2lx\n",
+        //                 factors[i*16+ 0], factors[i*16+ 1], factors[i*16+ 2], factors[i*16+ 3],
+        //                 factors[i*16+ 4], factors[i*16+ 5], factors[i*16+ 6], factors[i*16+ 7],
+        //                 factors[i*16+ 8], factors[i*16+ 9], factors[i*16+10], factors[i*16+11],
+        //                 factors[i*16+12], factors[i*16+13], factors[i*16+14], factors[i*16+15]);
+        //     };
+        //     printf("n=%lu k=%lu\n", n, k);
+        //     for (auto i = 0; i < 16; i++)
+        //         print(i);
+        // };
+
+        // debug();
 
         // multiply them all up
 
