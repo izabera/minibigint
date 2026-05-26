@@ -37,6 +37,37 @@ def plot_line(ax, sub, column, label, color):
     return True
 
 
+def format_sizes(rows, limit=5):
+    sizes = [
+        f"{int(row.bits)} bits ({int(row.limbs)} limbs)"
+        for row in rows.itertuples(index=False)
+    ]
+    if len(sizes) <= limit:
+        return ", ".join(sizes)
+
+    shown = ", ".join(sizes[:limit])
+    return f"{shown}, and {len(sizes) - limit} more"
+
+
+def comparison_summary(competitor, comparable, ns_column):
+    total = len(comparable)
+    faster = comparable[comparable[ns_column] < comparable["big_ns"]]
+    slower = comparable[comparable[ns_column] > comparable["big_ns"]]
+    tied = total - len(faster) - len(slower)
+
+    if faster.empty:
+        result = f"big faster in all {total} cases"
+    elif len(faster) == total:
+        result = f"{competitor} faster in all {total} cases"
+    else:
+        result = f"big faster in {len(slower)}/{total} cases"
+
+    if tied:
+        result = f"{result}; tied in {tied}/{total} cases"
+
+    return result
+
+
 df = pd.read_csv(INPUT, comment="#", na_values=["n/a", "N/A", ""])
 required = {"limbs", "bits", "op", "big_ns"}
 missing = sorted(required - set(df.columns))
@@ -131,15 +162,6 @@ for op in ops:
             summary.append((op, competitor, "no comparable data"))
             continue
 
-        faster = comparable[comparable[ns_column] < comparable["big_ns"]]
-        if faster.empty:
-            summary.append((op, competitor, "big faster for all measured sizes"))
-        else:
-            first = faster.iloc[0]
-            summary.append((
-                op,
-                competitor,
-                f"{competitor} first faster at {int(first.bits)} bits ({int(first.limbs)} limbs)",
-            ))
+        summary.append((op, competitor, comparison_summary(competitor, comparable, ns_column)))
 
-print(pd.DataFrame(summary, columns=["op", "competitor", "summary"]))
+print(pd.DataFrame(summary, columns=["op", "competitor", "summary"]).to_string(index=False))
