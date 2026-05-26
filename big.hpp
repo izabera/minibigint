@@ -7,21 +7,23 @@ using u64 = uint64_t;
 using u128 = __uint128_t;
 
 namespace detail {
-constexpr inline u32 oddprimes[] {
-          3,  5,  7, 11, 13, 17, 19, 23,
-     29, 31, 37, 41, 43, 47, 53, 59, 61,
-     67, 71, 73, 79, 83, 89, 97,101,103,
-    107,109,113,127,131,137,139,149,151,
-    157,163,167,173,179,181,191,193,197,
-    199,211,223,227,229,233,239,241,251,
-};
-
-constexpr inline auto inverses = [] {
-    struct { u64 inverses[sizeof oddprimes/sizeof *oddprimes]; } table;
+constexpr inline auto nprimes = 53;
+constexpr inline auto table = [] {
+    struct table {
+        u32 oddprimes[nprimes] {
+                  3,  5,  7, 11, 13, 17, 19, 23,
+             29, 31, 37, 41, 43, 47, 53, 59, 61,
+             67, 71, 73, 79, 83, 89, 97,101,103,
+            107,109,113,127,131,137,139,149,151,
+            157,163,167,173,179,181,191,193,197,
+            199,211,223,227,229,233,239,241,251,
+        };
+        u64 inverses[nprimes];
+    } table;
     auto ptr = table.inverses;
 
     // newton
-    for (auto p : oddprimes) {
+    for (auto p : table.oddprimes) {
         u64 x = p; // valid inverse mod 8 for odd p
         x *= 2 - p * x;
         x *= 2 - p * x;
@@ -258,8 +260,8 @@ struct big {
         // then remove all their factors in common with k!
         auto lo = n - k + 1;
 
-        for (auto i = 0u; i < sizeof oddprimes/sizeof *oddprimes; i++) {
-            auto p = oddprimes[i];
+        for (auto i = 0u; i < nprimes; i++) {
+            auto p = table.oddprimes[i];
             if (p > k)
                 break;
 
@@ -275,7 +277,7 @@ struct big {
                     auto &f = factors[m - lo];
                     // if (m - lo >= k) throw;
 
-                    f *= inverses.inverses[i]; // f /= p
+                    f *= table.inverses[i]; // f /= p
                 }
             }
         }
