@@ -2,6 +2,7 @@
 #include <gmp.h>
 
 u64 gmp_add_impl(const config& conf, int limbs) {
+    [[assume(limbs > 0 && limbs <= MAXLIMBS)]];
     buf x(conf, limbs), y(conf, limbs);
 
     for (u64 i = 0; i < conf.iters.add; i++)
@@ -13,6 +14,7 @@ u64 gmp_add_impl(const config& conf, int limbs) {
 }
 
 u64 gmp_sub_impl(const config& conf, int limbs) {
+    [[assume(limbs > 0 && limbs <= MAXLIMBS)]];
     buf x(conf, limbs), y(conf, limbs);
     x[limbs-1] = -1;
     y[limbs-1] = 0;
@@ -36,6 +38,7 @@ void __gmpn_mullo_n(mp_ptr, mp_srcptr, mp_srcptr, mp_size_t);
 #endif
 
 u64 gmp_mul_impl(const config& conf, int limbs) {
+    [[assume(limbs > 0 && limbs <= MAXLIMBS)]];
     buf x(conf, limbs), y(conf, limbs), acc;
     y[0] |= 1;
 
