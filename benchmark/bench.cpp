@@ -172,10 +172,10 @@ int main(int argc, char **argv) {
                 cksum cksum;
                 auto tick = std::chrono::steady_clock::now;
                 auto t0 = tick();
-                cksum.add   = conf.iters.add   ? impl.add  (conf) : 0; auto t1 = tick();
-                cksum.sub   = conf.iters.sub   ? impl.sub  (conf) : 0; auto t2 = tick();
-                cksum.mul   = conf.iters.mul   ? impl.mul  (conf) : 0; auto t3 = tick();
-                cksum.binom = conf.iters.binom ? impl.binom(conf) : 0; auto t4 = tick();
+                if (conf.iters.add  ) cksum.add   = impl.add  (conf); auto t1 = tick();
+                if (conf.iters.sub  ) cksum.sub   = impl.sub  (conf); auto t2 = tick();
+                if (conf.iters.mul  ) cksum.mul   = impl.mul  (conf); auto t3 = tick();
+                if (conf.iters.binom) cksum.binom = impl.binom(conf); auto t4 = tick();
 
                 times current {
                     (t1-t0).count() * 1. / conf.iters.add  ,
@@ -223,10 +223,10 @@ int main(int argc, char **argv) {
                 exit(1);
             };
 
-            check("add"  , ckbig.add  , ckgmp.add  , ckboost.add  );
-            check("sub"  , ckbig.sub  , ckgmp.sub  , ckboost.sub  );
-            check("mul"  , ckbig.mul  , ckgmp.mul  , ckboost.mul  );
-            check("binom", ckbig.binom, ckgmp.binom, ckboost.binom);
+            if (conf.iters.add  ) check("add"  , ckbig.add  , ckgmp.add  , ckboost.add  );
+            if (conf.iters.sub  ) check("sub"  , ckbig.sub  , ckgmp.sub  , ckboost.sub  );
+            if (conf.iters.mul  ) check("mul"  , ckbig.mul  , ckgmp.mul  , ckboost.mul  );
+            if (conf.iters.binom) check("binom", ckbig.binom, ckgmp.binom, ckboost.binom);
         }
 
         auto stats = [&](auto& impl) {
