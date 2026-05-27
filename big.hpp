@@ -1,6 +1,5 @@
 #pragma once
 
-#include <array>
 #include <cstdint>
 using u8 = uint8_t;
 using u32 = uint32_t;
@@ -58,7 +57,7 @@ namespace detail {
   the results is as follows
 */
 
-constexpr inline std::array<u8,53> oddprimes {
+constexpr inline u8 oddprimes[] {
           3,  5,  7, 11, 13, 17, 19, 23,
      29, 31, 37, 41, 43, 47, 53, 59, 61,
      67, 71, 73, 79, 83, 89, 97,101,103,
@@ -66,37 +65,37 @@ constexpr inline std::array<u8,53> oddprimes {
     157,163,167,173,179,181,191,193,197,
     199,211,223,227,229,233,239,241,251,
 };
-constexpr inline std::array<u8, 5> p3   { 3, 9, 27, 81, 243 };
-constexpr inline std::array<u8, 3> p5   { 5, 25, 125 };
-constexpr inline std::array<u8, 2> p7   { 7, 49 };
-constexpr inline std::array<u8, 2> p11  { 11,121 };
-constexpr inline std::array<u8, 2> p13  { 13,169 };
-constexpr inline std::array<u8,25> lowp {
+constexpr inline u8 p3  [] { 3, 9, 27, 81, 243 };
+constexpr inline u8 p5  [] { 5, 25, 125 };
+constexpr inline u8 p7  [] { 7, 49 };
+constexpr inline u8 p11 [] { 11,121 };
+constexpr inline u8 p13 [] { 13,169 };
+constexpr inline u8 lowp[] {
      17, 19, 23, 29, 31, 37, 41, 43,
      47, 53, 59, 61, 67, 71, 73, 79,
      83, 89, 97,101,103,107,109,113,
     127,
 };
-constexpr inline std::array<u8,23> highp {
+constexpr inline u8 highp[] {
         131,137,139,149,151,157,163,
     167,173,179,181,191,193,197,199,
     211,223,227,229,233,239,241,251,
 };
 struct alignas(64) needk {
-    u8 need3 [p3  .size()];
-    u8 need5 [p5  .size()];
-    u8 need7 [p7  .size()];
-    u8 need11[p11 .size()];
-    u8 need13[p13 .size()];
-    u8 needx [lowp.size()];
+    u8 need3 [sizeof p3  ];
+    u8 need5 [sizeof p5  ];
+    u8 need7 [sizeof p7  ];
+    u8 need11[sizeof p11 ];
+    u8 need13[sizeof p13 ];
+    u8 needx [sizeof lowp];
     constexpr needk() {}
     constexpr needk(int k) {
-        for (auto i = 0u; i < p3  .size(); i++) need3 [i] = k / p3  [i];
-        for (auto i = 0u; i < p5  .size(); i++) need5 [i] = k / p5  [i];
-        for (auto i = 0u; i < p7  .size(); i++) need7 [i] = k / p7  [i];
-        for (auto i = 0u; i < p11 .size(); i++) need11[i] = k / p11 [i];
-        for (auto i = 0u; i < p13 .size(); i++) need13[i] = k / p13 [i];
-        for (auto i = 0u; i < lowp.size(); i++) needx [i] = k / lowp[i];
+        for (auto i = 0u; i < sizeof p3  ; i++) need3 [i] = k / p3  [i];
+        for (auto i = 0u; i < sizeof p5  ; i++) need5 [i] = k / p5  [i];
+        for (auto i = 0u; i < sizeof p7  ; i++) need7 [i] = k / p7  [i];
+        for (auto i = 0u; i < sizeof p11 ; i++) need11[i] = k / p11 [i];
+        for (auto i = 0u; i < sizeof p13 ; i++) need13[i] = k / p13 [i];
+        for (auto i = 0u; i < sizeof lowp; i++) needx [i] = k / lowp[i];
     }
 };
 
@@ -114,19 +113,19 @@ consteval auto newton(u64 p) {
 constexpr inline auto table = [] {
     struct {
         needk needs[257];
-        u64 inverses[oddprimes.size()];
-        u64 lemire[lowp.size()+highp.size()];
+        u64 inverses[sizeof oddprimes];
+        u64 lemire[sizeof lowp+sizeof highp];
     } table;
 
     for (auto i = 0; i < 257; i++)
         table.needs[i] = i;
 
-    for (auto i = 0u; i < oddprimes.size(); i++)
+    for (auto i = 0u; i < sizeof oddprimes; i++)
         table.inverses[i] = newton(oddprimes[i]);
-    for (auto i = 0u; i < lowp.size(); i++)
+    for (auto i = 0u; i < sizeof lowp; i++)
         table.lemire[i] = u64(-1) / lowp[i] + 1;
-    for (auto i = 0u; i < highp.size(); i++)
-        table.lemire[i+lowp.size()] = u64(-1) / highp[i] + 1;
+    for (auto i = 0u; i < sizeof highp; i++)
+        table.lemire[i+sizeof lowp] = u64(-1) / highp[i] + 1;
     return table;
 }();
 
@@ -163,7 +162,7 @@ constexpr void remove_power(u64 lo, u64 need, u64 *factors) {
 [[maybe_unused]] __attribute__((always_inline))
 constexpr void remove_rest(u64 lo, u64 k, u64 *factors, auto mod) {
     u64 base = 5;
-    for (auto i = 0u; i < lowp.size(); i++) {
+    for (auto i = 0u; i < sizeof lowp; i++) {
         u64 p = lowp[i];
         if (p > k)
             break;
@@ -175,12 +174,12 @@ constexpr void remove_rest(u64 lo, u64 k, u64 *factors, auto mod) {
             factors[m - lo] *= inv;
     }
 
-    base += lowp.size();
-    for (auto i = 0u; i < highp.size(); i++) {
+    base += sizeof lowp;
+    for (auto i = 0u; i < sizeof highp; i++) {
         u64 p = highp[i];
         if (p > k)
             break;
-        u64 rem = mod(lo, p, i+lowp.size());
+        u64 rem = mod(lo, p, i+sizeof lowp);
         u64 m = lo + (rem ? p - rem : 0);
         u64 inv = table.inverses[i+base];
         factors[m - lo] *= inv;

@@ -159,7 +159,7 @@ for op in ops:
 
         comparable = sub[["bits", "limbs", "big_ns", ns_column]].dropna()
         if comparable.empty:
-            summary.append((op, competitor, "no comparable data"))
+            # summary.append((op, competitor, "no comparable data"))
             continue
 
         summary.append((op, competitor, comparison_summary(competitor, comparable, ns_column)))
