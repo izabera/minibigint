@@ -64,7 +64,6 @@ bool test_arith_size() {
         if (!validate(sum, big<limbs  >{}, mpn_add_n, "sum")) return false;
         if (!validate(mul, big<limbs*2>{}, mpn_mul_n, "mul")) return false;
         if (!validate(sub, big<limbs  >{}, mpn_sub_n, "sub")) return false;
-        return true;
     }
 
     return true;
